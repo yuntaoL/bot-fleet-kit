@@ -39,11 +39,19 @@ for f in files:
 if not hits: print("- none")
 print("\n## rules that may enumerate instead of stating a principle (heuristic)")
 cand=glob.glob("manager/local/*.md")+glob.glob("manager/roles/*.md")+glob.glob("manager/overrides.md")+glob.glob("bots/*/rules.md")
-neg=re.compile(r"(?i)\b(never|no|not|don't|do not|without)\b"); soft=re.compile(r"(?i)(e\.g\.|such as|and similar|judgment|for example)")
+trig=re.compile(r"(?i)\b(never|no|don't|do not|not|without)\b")
+soft=re.compile(r"(?i)(e\.g\.|such as|and similar|use judgment|for example)")
+std=re.compile(r"(?i)may add or tighten, never loosen")
+def items(seg):  # list items after a negation: comma- or slash-separated (a, b, c / a/b/c)
+    seg=re.split(r"[.;:(]",seg,maxsplit=1)[0]
+    parts=[x for x in re.split(r",|(?<=\w)/(?=\w)",seg) if x.strip()]
+    return len(parts)
 h=0
 for f in sorted(cand):
     for i,l in enumerate(open(f).read().split("\n"),1):
-        if neg.search(l) and (l.count(",")+l.count("/"))>=3 and not soft.search(l): h+=1; print(f"- {f}:{i} {l.strip()[:110]}")
+        if std.search(l) or soft.search(l) or "http" in l: continue
+        segs=[l[m.end():] for m in trig.finditer(l)]
+        if any(items(s)>=3 for s in segs): h+=1; print(f"- {f}:{i} {l.strip()[:110]}")
 if not h: print("- none")
 print("\nManual items (docs/AUDIT.md): contradictions/looser layers, open items, live vs. backed-up routines, scope, lessons to promote.")
 PY

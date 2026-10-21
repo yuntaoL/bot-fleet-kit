@@ -1,5 +1,9 @@
 # Changelog (template)
 
+## 0.6.1 – 2026-10-21
+- audit.sh rules-style check: ignores the standard precedence line ("may add or tighten, never loosen…"), lines with "e.g./such as/and similar/use judgment", and URLs; slashes no longer count by themselves. Flags only real enumerated lists: 3+ comma- or slash-separated items (a/b/c) after never/no/don't/not/without, within the same clause.
+- No migration. Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.6.1`.
+
 ## 0.6.0 – 2026-10-21
 - **Principle-first rules.** New `template/docs/WRITING_RULES.md`: state intent and why, a few illustrative examples (never the boundary), the judgment test ("would the owner be uncomfortable seeing this stored or shared?"), concrete rules only for hard safety lines or learned failures, keep rules short.
 - `template/rules/common.md` rewritten in that style: three hard lines (nothing goes out without approval; no secrets; keep out anything sensitive, private or not yours to store), fleet mechanics, and learned habits. Same obligations, fewer items.
