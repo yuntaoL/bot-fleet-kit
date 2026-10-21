@@ -4,7 +4,7 @@ Tell a bot in the new account:
 > **Clone `<repo-url>` and follow RESTORE.md.**
 
 ## Steps for the new primary bot
-1. Clone the repo to the shared machine (e.g. `~/bot-fleet`) and run `scripts/bootstrap.sh`.
+1. Clone the repo to the shared machine (e.g. `~/bot-fleet`), set git identity, and run `scripts/bootstrap.sh <template-url>`.
 2. Read `AGENT_GUIDE.md`, `fleet.json` and `shared/`.
 3. **Restore yourself** from `bots/<primary-slug>/` (the bot with `"role": "primary"` in fleet.json): apply `profile.json` and `instructions.md`, load `memory.md` into memory, recreate each `routines/*.json` (keep paused ones paused), install `skills/`, and resume open items in `state.json`.
 4. Read `secrets.md` files and ask the user to re-create each listed secret. Never guess them.

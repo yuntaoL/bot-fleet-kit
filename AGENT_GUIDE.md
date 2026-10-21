@@ -1,6 +1,6 @@
 # Agent Guide (rules for every bot)
 
-You are one bot in a fleet. Your folder is `bots/<your-slug>/`. Set `BOT_NAME=<your-slug>` in every git command you run here. The fleet manager also sets `BOT_ROLE=manager`.
+You are one bot in a fleet. Your folder is `bots/<your-slug>/`. Export `BOT_NAME=<your-slug>` for every git command you run here. The fleet manager also sets `BOT_ROLE=manager`.
 
 ## 1. Files are the source of truth; chat is scratch
 Anything worth remembering beyond this session goes into `memory.md` (durable facts) or `state.json` (open work) **in the same step you learn it**. Don't rely on platform memory or chat context alone.
@@ -32,6 +32,19 @@ Rewrite `memory.md` instead of appending forever; target < 200 lines. History go
 
 ## 7. Monthly restore dry run
 Once a month the fleet manager checks that `RESTORE.md` plus the repo is enough to rebuild each bot (profile, instructions, routines, skills present and valid; `scripts/validate.sh` passes) and logs the result in its journal.
+
+## Roles
+- **primary**: the user's main bot; usually also the **fleet manager** (`"manager": true` in fleet.json, commits with `BOT_ROLE=manager`).
+- **builder**: the bot that creates other bots; used by RESTORE.md to rebuild the fleet.
+- **worker**: everything else. `status: retired` bots are kept for history and not recreated.
+
+## Adding a bot (manager)
+1. Pick a slug (`^[a-z0-9-]+$`).
+2. `cp -r templates/bot bots/<slug>` and remove `routines/example.json`.
+3. Fill `profile.json` (name, platform id, description, settings, status) and `instructions.md`.
+4. Add an entry to `fleet.json`; run `scripts/validate.sh`.
+5. `git add fleet.json bots/<slug>/ && BOT_ROLE=manager git commit -m "manager: add <slug>"`, then pull --rebase and push.
+Routines and memory the manager can't see are filled in by the bot itself on its next wake.
 
 ## Folder contents
 | file | purpose |

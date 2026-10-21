@@ -22,16 +22,28 @@ shared/          shared profile, preferences, skills(user-owned)
 bots/<slug>/     one folder per bot                 (user-owned)
 ```
 
-## Quick start
-1. Click **Use this template** (or fork). **Make the new repo PRIVATE.**
-2. Clone it to the machine your bots share:
-   `git clone https://github.com/<you>/bot-fleet.git ~/bot-fleet`
-3. Bootstrap: `cd ~/bot-fleet && scripts/bootstrap.sh` (installs the pre-commit boundary hook, creates `fleet.json` if missing, records the template version).
-4. Tell your primary bot: **"Read AGENT_GUIDE.md in ~/bot-fleet and set up the fleet."** It becomes the fleet manager, adds every bot to `fleet.json`, and creates `bots/<slug>/` from `templates/bot/`.
+## Adoption guide (first-time setup)
+Prereqs on the machine your bots share: `git`, `gh` (logged in: `gh auth login`), `python3`.
 
-To restore after a loss: tell a fresh bot **"Clone <repo> and follow RESTORE.md."**
+1. **Create your repo.** On GitHub click **Use this template → Create a new repository**, choose **Private**, name it e.g. `bot-fleet`. (CLI: `gh repo create <you>/bot-fleet --private --template <owner>/bot-fleet-template`.) Don't fork publicly: your fleet data must stay private.
+2. **Clone it** to the shared bot machine: `git clone https://github.com/<you>/bot-fleet.git ~/bot-fleet && cd ~/bot-fleet`
+3. **Bootstrap:** `scripts/bootstrap.sh <template-repo-url>`. It checks git identity (set `git config user.name/user.email` if it complains), installs the pre-commit boundary hook, adds the `upstream` remote, installs `jsonschema` if possible, creates `fleet.json`, and commits it as the manager.
+4. **Hand off to your primary bot:** tell it *"Read AGENT_GUIDE.md in ~/bot-fleet. You are the fleet manager: add every bot to fleet.json and create its folder (see 'Adding a bot')."*
+5. **Check:** `scripts/validate.sh` passes and `git log` shows the manager's commit pushed.
+6. Tell each bot: *"Read AGENT_GUIDE.md; your folder is bots/<slug>/; commit with BOT_NAME=<slug>."*
 
-To get template updates later, see [VERSIONING.md](VERSIONING.md).
+Restoring after a loss: tell a fresh bot **"Clone <repo> and follow RESTORE.md."**
+
+## Update procedure (getting template fixes)
+```
+cd ~/bot-fleet
+git remote -v | grep upstream || git remote add upstream https://github.com/<owner>/bot-fleet-template.git
+git pull --rebase                      # clean tree, up to date
+BOT_ROLE=manager scripts/upgrade.sh 0.1.1
+git show --stat                         # review
+git push
+```
+Only template-owned paths change; your `bots/`, `shared/`, `fleet.json` are touched only by migrations. Details in [VERSIONING.md](VERSIONING.md). Never hand-edit template-owned files in your fleet repo; propose changes upstream ([CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## License
 MIT

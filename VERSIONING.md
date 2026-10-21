@@ -6,8 +6,8 @@ The template uses **semver** (`VERSION` file, git tags `vX.Y.Z`).
 ## Ownership split
 | owner | paths | upgrades |
 |---|---|---|
-| template | `scripts/`, `schema/`, `migrations/`, `templates/`, `AGENT_GUIDE.md`, `RESTORE.md`, `VERSIONING.md`, `.github/` | replaced by upgrade |
-| user | `bots/`, `shared/`, `fleet.json`, `README.md`, `CHANGELOG.md` | **never touched** by checkout; only migrations may edit them |
+| template | `scripts/`, `schema/`, `migrations/`, `templates/`, `AGENT_GUIDE.md`, `RESTORE.md`, `VERSIONING.md`, `CONTRIBUTING.md`, `.github/` | replaced by upgrade |
+| user | `bots/`, `shared/`, `fleet.json`, `README.md`, `CHANGELOG.md`, `VERSION` (written by upgrade) | **never touched** by checkout; only migrations may edit them |
 
 Don't edit template-owned files in your fleet repo; put customizations in `shared/` (e.g. `shared/RULES.local.md`).
 
