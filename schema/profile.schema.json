@@ -1,3 +1,47 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"profile.json","type":"object","required":["name","id"],
-"properties":{"name":{"type":"string"},"id":{"type":"string"},"title":{"type":"string"},"description":{"type":"string"},
-"avatarShape":{"type":"string"},"avatarColor":{"type":"string"},"settings":{"type":"object"},"status":{"enum":["active","paused","retired"]}}}
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "profile.json",
+ "type": "object",
+ "required": [
+  "name",
+  "id"
+ ],
+ "properties": {
+  "name": {
+   "type": "string"
+  },
+  "id": {
+   "type": "string"
+  },
+  "title": {
+   "type": "string"
+  },
+  "description": {
+   "type": "string"
+  },
+  "avatarShape": {
+   "type": "string"
+  },
+  "avatarColor": {
+   "type": "string"
+  },
+  "settings": {
+   "type": "object"
+  },
+  "status": {
+   "enum": [
+    "active",
+    "paused",
+    "retired"
+   ]
+  },
+  "role": {
+   "enum": [
+    "manager",
+    "builder",
+    "worker",
+    "retired"
+   ]
+  }
+ }
+}

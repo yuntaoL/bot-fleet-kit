@@ -4,5 +4,6 @@
     "title": "",
     "description": "One-line job.",
     "settings": {},
-    "status": "active"
+    "status": "active",
+    "role": "worker"
 }
