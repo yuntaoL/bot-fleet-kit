@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # The sync loop, run inside YOUR worktree: fetch, rebase onto origin/main, commit only paths OWNERS.json grants you, push, retry.
-# Usage: template/scripts/sync.sh "<commit message>" [paths...]   (default paths: bots/<fleet.bot>/, or manager/ for the manager)
+# Usage: template/scripts/sync.sh "<commit message>" [paths...]   (default paths: bots/<fleet.bot>/; the manager also gets manager/ and README.md)
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 msg="${1:?usage: sync.sh \"message\" [paths...]}"; shift || true
 me="${BOT_NAME:-$(git config --get fleet.bot || true)}"; role="${BOT_ROLE:-$(git config --get fleet.role || true)}"
 [ -n "$me" ] || { echo "sync: no identity; run inside your worktree or set BOT_NAME/BOT_ROLE" >&2; exit 1; }
-if [ $# -eq 0 ]; then if [ "$role" = manager ]; then set -- manager/ README.md; else set -- "bots/$me/"; fi; fi
+if [ $# -eq 0 ]; then if [ "$role" = manager ]; then set -- manager/ README.md; [ -d "bots/$me" ] && set -- "$@" "bots/$me/"; else set -- "bots/$me/"; fi; fi
 git add -- "$@"
 git diff --cached --quiet && { echo "sync: no change"; git fetch -q origin; git rebase -q origin/main 2>/dev/null || true; exit 0; }
 BOT_NAME="$me" BOT_ROLE="$role" git commit -qm "$me: $msg"

@@ -1,5 +1,10 @@
 # Changelog (template)
 
+## 0.6.2 – 2026-10-21
+- examples/tracker: optional **start time**. Requests may carry `startAt` (time) and/or `startWhen` (status trigger); full checks begin at whichever comes first, with light cached checks before that (not counted toward maxChecks). Deliveries and exceptions are always reported. Added to rules.md and the live-package-tracking skill, written as principles.
+- sync.sh: with no paths, the manager now also commits its own `bots/<me>/` folder (previously only `manager/` and README.md).
+- No migration. Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.6.2`.
+
 ## 0.6.1 – 2026-10-21
 - audit.sh rules-style check: ignores the standard precedence line ("may add or tighten, never loosen…"), lines with "e.g./such as/and similar/use judgment", and URLs; slashes no longer count by themselves. Flags only real enumerated lists: 3+ comma- or slash-separated items (a/b/c) after never/no/don't/not/without, within the same clause.
 - No migration. Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.6.1`.

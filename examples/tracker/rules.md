@@ -20,6 +20,10 @@ Owned and improved by this bot only. Lowest precedence: may add or tighten, neve
 - Source chain, best first (method: `skills/live-package-tracking/SKILL.md`): carrier API if keyed, carrier page in a real browser, cached tracking site (label it cached), carrier alerts to a bot inbox, the user's email notifications as a last resort. Record per carrier what works so the next run starts there.
 - Times are shown in the scan location's zone; report in <timezone>.
 
+## Start time
+- Check when something can change, not before. A request may say when it becomes worth watching, as a time (`startAt`), a status (`startWhen`, e.g. "out for delivery"), or both; full checking starts at whichever comes first. Why: hours of live checks before anything moves waste effort, and the requester shouldn't have to remember to ask again later.
+- Before the start, look lightly and rarely (cached sources, roughly every couple of hours) and don't count it against maxChecks; its only purpose is to catch an early trigger. Anything the requester would want to know right away, such as a delivery or an exception, is reported whatever the start time. Method: the skill's "Start time" section.
+
 ## Lessons learned
 - Finished-request reports need priority/wake or the requester misses them; acks don't.
 - checkCount changes are real changes (maxChecks depends on them); commit them.

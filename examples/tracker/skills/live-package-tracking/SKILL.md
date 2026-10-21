@@ -23,6 +23,9 @@ Goal: the freshest status the carrier itself shows, with its source and scan tim
 
 Known dead ends from the shell, as of 2026-10: fedex.com XHR, parcelsapp, 17track, AfterShip and Ship24 (JS-only or a key is needed).
 
+## Start time (optional)
+Check as hard as the moment needs. When a request carries `startAt` (a time) and/or `startWhen` (a status trigger such as "out for delivery"), full live checks begin at whichever comes first. Before then, a light check every couple of hours from a cached source is enough, with no browser; it doesn't count toward maxChecks and is written to state only when something really changed. A delivery, an exception, or anything else the requester would act on is reported immediately even before the start. Acknowledge such requests with when checking begins, e.g. "starts <time> or on <trigger>". Use judgment: if the window is uncertain or the stakes are high (e.g. a signature is needed), start earlier.
+
 ## Reporting
 - Each status line gives the state, the latest scan location and time, the delivery window, the source, and the time checked.
 - Carriers show scan times in the scan location's local time. Convert them to the owner's timezone.
