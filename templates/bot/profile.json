@@ -1,9 +1,0 @@
-{
-    "name": "Example Bot",
-    "id": "<platform-id>",
-    "title": "",
-    "description": "One-line job.",
-    "settings": {},
-    "status": "active",
-    "role": "worker"
-}

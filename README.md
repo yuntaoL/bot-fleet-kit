@@ -2,36 +2,29 @@
 
 A git-backed pattern for **backing up and restoring a fleet of AI assistant bots**.
 
-**Why:** if your assistant account or platform disappears, your bots' instructions, routines and memory go with it; and chat context gets compacted, so bots forget. Here the repo is the durable copy and every bot re-reads its rules and state from files on every run.
+**Why:** if your assistant account or platform disappears, your bots' instructions, routines and memory go with it; and chat context gets compacted, so bots forget. Here the repo is the durable copy, each bot re-reads its rules and state from files on every run, and permissions follow the folder structure.
 
-## Layout
+## Layout (details: [template/docs/LAYOUT.md](template/docs/LAYOUT.md))
 ```
-rules/README.md        rule layers + precedence          (template)
-rules/common.md        rules every bot follows           (template, upgrade-only)
-rules/local/           overrides.md (human-approved) + fleet additions (yours, manager-only)
-rules/roles/<role>.md  role rules (yours, manager-only; defaults in templates/rules/roles/)
-bots/<me>/rules.md     each bot's own rules (that bot only)
-docs/                  ADOPTION, AGENT_GUIDE, RESTORE, VERSIONING, CONTRIBUTING, CHANGELOG (template)
-schema/ scripts/ migrations/ templates/ .github/       (template)
-fleet.json  bots/<slug>/  shared/  README.md  CHANGELOG.md   (yours)
+template/      template-owned (upgrade only): rules/common.md, OWNERS.json, docs, scripts, schema, migrations, defaults
+manager/       manager-owned: fleet.json, roles/, overrides.md, local/, shared/, CHANGELOG.md
+bots/<slug>/   owned by that bot
+README.md, LICENSE (manager) · .github/ (template)
 ```
 
-## Adoption (summary — full steps in [docs/ADOPTION.md](docs/ADOPTION.md))
-1. *Use this template* → **Private** repo.
-2. Clone to the shared bot machine; set git identity.
-3. `scripts/bootstrap.sh <this-template-url>`; `git push`.
-4. Tell your primary bot to read `rules/common.md` + `rules/roles/manager.md` and set up the fleet.
-5. Put the bootstrap prompt (`templates/bot/instructions.md`) at the top of every bot's instructions.
+## Adoption (summary; full steps in [template/docs/ADOPTION.md](template/docs/ADOPTION.md))
+1. *Use this template* → **Private** repo; clone to the shared bot machine; set git identity.
+2. `template/scripts/bootstrap.sh <this-template-url>`; `git push`.
+3. Add bots to `manager/fleet.json`, seed `bots/<slug>/`, then `template/scripts/worktree.sh --all`.
+4. Put the bootstrap prompt (`template/defaults/bot/instructions.md`) at the top of every bot's instructions.
 
 ## Update procedure
 ```
-git remote add upstream https://github.com/<owner>/bot-fleet-template.git   # once (bootstrap does it)
-git pull --rebase
-BOT_ROLE=manager scripts/upgrade.sh <version>
-git show --stat && git push
+cd ~/bot-fleet-worktrees/<manager>      # the manager's own worktree
+git fetch origin && git rebase origin/main
+BOT_ROLE=manager template/scripts/upgrade.sh <version>
+git show --stat && git push origin HEAD:main
 ```
-Only template-owned paths change; removed template files are deleted; migrations handle schema bumps. See [docs/VERSIONING.md](docs/VERSIONING.md). Guidance changes go upstream first ([docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)).
+See [template/docs/VERSIONING.md](template/docs/VERSIONING.md); guidance changes go upstream first ([CONTRIBUTING](template/docs/CONTRIBUTING.md)).
 
-Restore: tell a fresh bot **"Clone <repo> and follow docs/RESTORE.md."**
-
-MIT licensed.
+Restore: tell a fresh bot **"Clone <repo> and follow template/docs/RESTORE.md."** · MIT licensed.

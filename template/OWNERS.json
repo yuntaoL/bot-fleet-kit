@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "comment": "Single source of write permissions. First matching glob wins. ** = any depth, * = one path segment. Owners: template (only scripts/upgrade.sh, BOT_FLEET_UPGRADE=1), manager, self (bots/<slug>/ = bot <slug>). 'create' lists roles that may ADD new files under a self-owned tree (seeding a new bot / restore).",
+  "rules": [
+    { "path": "template/**",  "owner": "template" },
+    { "path": ".github/**",   "owner": "template" },
+    { "path": "manager/**",   "owner": "manager" },
+    { "path": "README.md",    "owner": "manager" },
+    { "path": "LICENSE",      "owner": "manager" },
+    { "path": "bots/*/**",    "owner": "self", "create": ["manager", "builder"] }
+  ]
+}
