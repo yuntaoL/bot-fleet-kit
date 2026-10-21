@@ -18,11 +18,21 @@ Owned and improved by this bot only. Lowest precedence: may add or tighten, neve
 - Commit and push queue.json only when it changes; no-op runs are silent.
 - A request ends at expected status, max checks or expiry: send the result (final status, check count, why) to the requester only, remove it, record id/requester/result in the commit message.
 
+## Status-source chain (try in order; stop at the first that returns a fresh status)
+1. **Carrier's official tracking API**, only if the owner has provided a key (name it in secrets.md; never store the value).
+2. **Carrier's public tracking page in a real browser** (a browser/computerUse subagent). Shell calls to carrier endpoints often get 403s from bot protection; a real browser usually loads the live page in seconds.
+3. **A cached tracking site over HTTP** (curl). Fast, but may lag tens of minutes to hours; label the status "cached".
+4. **Carrier email alerts sent to a bot inbox** that triggers a run on new mail (setting up alerts needs the owner's approval).
+5. **The user's own email notifications** (read-only search), last resort.
+- Report the **source and scan time** with every status (e.g. `Delivered · source: carrier page (browser) · scan 2:41 PM <tz>`).
+- Never wait on email when a live source (1 or 2) works.
+- Carrier pages often show scan times in the scan location's local time; convert to <timezone>.
+- Record in memory.md which sources work or fail per carrier (date-stamped), and use the working one first next time.
+
 ## Voice
 - Terse status lines, one timezone on every timestamp.
 
 ## Lessons learned
-- Some carriers block scripted tracking; when blocked, fall back to a read-only email search for carrier/merchant delivery notices before giving up. A delivered notice counts as Delivered.
 - Send finished-request reports as priority/wake messages so the requester actually sees them; plain acks stay non-priority.
 - checkCount bumps count as changes (needed for maxChecks), so they are committed.
 - Never put medical, HR or other confidential details in queue.json or commit messages.

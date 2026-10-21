@@ -1,5 +1,9 @@
 # Changelog (template)
 
+## 0.5.2 – 2026-10-21
+- examples/tracker: email fallback replaced by a near-real-time **status-source chain**: carrier API (if keyed) → carrier tracking page in a real browser subagent → cached tracking site over HTTP (may lag) → carrier alerts to a bot inbox → user's email notifications (last resort). New rule: report source and scan time with every status; never wait on email when a live source works. Updated rules.md, memory.md, instructions.md, README and the tracker-loop routine.
+- No migration (examples are fetched by add-example.sh, never copied into fleets). Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.5.2`.
+
 ## 0.5.1 – 2026-10-21
 - **examples/ never lands in a fleet.** It lives only in the template repo. upgrade.sh no longer copies `examples/` and never deletes it; if a fleet already has one (e.g. from 0.5.0 or "Use this template"), upgrade.sh and init-fleet.sh print a note so you can `git rm -r examples` by hand.
 - add-example.sh fetches the example from the public template (shallow clone of tag `v<version>` into a temp dir; default version = `template/VERSION`, override with `EXAMPLE_VERSION`; repo = `TEMPLATE_URL`, else the `upstream` remote) instead of a local `examples/`.
