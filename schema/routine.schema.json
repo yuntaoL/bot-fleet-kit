@@ -1,0 +1,3 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"routines/*.json","type":"object","required":["name","prompt","schedule","status"],
+"properties":{"name":{"type":"string"},"prompt":{"type":"string"},"schedule":{"type":"string","description":"cron or plain-language schedule"},
+"timezone":{"type":"string"},"status":{"enum":["active","paused"]}}}

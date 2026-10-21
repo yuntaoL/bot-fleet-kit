@@ -1,0 +1,7 @@
+{
+    "name": "example",
+    "prompt": "...",
+    "schedule": "0 9 * * 1-5",
+    "timezone": "UTC",
+    "status": "paused"
+}

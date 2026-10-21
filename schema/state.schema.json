@@ -1,0 +1,3 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"state.json","type":"object","required":["updatedAt","open"],
+"properties":{"updatedAt":{"type":"string"},"open":{"type":"array","items":{"type":"object","required":["id","what"],
+"properties":{"id":{"type":"string"},"what":{"type":"string"},"waitingOn":{"type":"string"},"due":{"type":"string"},"notes":{"type":"string"}}}}}}
