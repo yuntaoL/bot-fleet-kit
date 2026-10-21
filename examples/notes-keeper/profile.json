@@ -1,0 +1,8 @@
+{
+  "name": "Notes Keeper",
+  "id": "<platform-id>",
+  "title": "",
+  "description": "Obsidian vault manager: files Inbox items daily, runs a weekly cleanup, keeps index pages and a changelog row for every write, follows the vault's AGENTS.md rules file. Copy the full text from instructions.md into the platform instructions.",
+  "settings": {},
+  "status": "active"
+}

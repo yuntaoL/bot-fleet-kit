@@ -27,5 +27,7 @@ Top of each bot's platform instructions; text in `template/defaults/bot/instruct
 2. Commit from the manager worktree (manager may add files under bots/<slug>/); `template/scripts/worktree.sh <slug>`.
 3. After that, only the bot edits its folder.
 
+From an example: `BOT_ROLE=manager template/scripts/add-example.sh <example> <slug> [name] [platform-id]` does step 1 (see examples/README.md).
+
 ## Seen-events log
 `manager/shared/state/notified.json`: list of `{"key": "<source>:<id>:<status>", "at": "<ISO>", "by": "<slug>"}`. Check before notifying the human; message the manager to record.

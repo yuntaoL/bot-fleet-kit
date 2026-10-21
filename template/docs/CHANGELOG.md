@@ -1,5 +1,11 @@
 # Changelog (template)
 
+## 0.5.0 – 2026-10-21
+- **Examples:** new template-owned `examples/` with two generic, shareable bot packages in the `bots/<slug>/` layout: `examples/tracker` (check-until-done queue in a private git repo, 15-min loop that pauses when idle, expiry/max checks/expected status, dedupe, results only to the requester, email fallback when a carrier blocks scripted tracking) and `examples/notes-keeper` (Obsidian vault manager: AGENTS.md rules file, index pages, changelog row per write, `00 Inbox/` filing daily, weekly cleanup, fleet reconcile). Routine prompts are templates with `<placeholders>`; routines ship `paused`.
+- `template/scripts/add-example.sh <example> <slug> [name] [platform-id]` (manager): copies an example to `bots/<slug>`, fills `<me>`/`<wt>`/`<role>`/name/id, registers a worker in `manager/fleet.json`. Does not commit.
+- OWNERS.json: `examples/**` owned by template. upgrade.sh: `examples` added to template paths. validate.sh: schema-checks example profiles, states and routines.
+- No migration. Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.5.0`.
+
 ## 0.4.0 – 2026-10-21
 **Breaking layout change (migration included). Requires 0.3.2 first.**
 - **Folder-owned permissions:** one owner class per tree: `template/` (upgrade only), `manager/` (manager), `bots/<slug>/` (that bot). Single source: `template/OWNERS.json`, enforced by `check-boundary.sh` and `validate.sh` (unowned or doubly-owned paths fail). New file types inside an owned folder need no permission change. See docs/LAYOUT.md.

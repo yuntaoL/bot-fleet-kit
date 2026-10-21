@@ -1,0 +1,20 @@
+# Examples
+
+Generic, shareable bot packages in the same layout as `bots/<slug>/`, with no personal data. Copy one into your fleet, fill in the `<placeholders>`, and register it.
+
+| example | role | what it does |
+|---|---|---|
+| [tracker](tracker/) | worker | check-until-done queue for other bots (e.g. shipments); 15-min loop that pauses when idle |
+| [notes-keeper](notes-keeper/) | worker | Obsidian vault manager: daily Inbox filing, weekly cleanup, changelog + indexes, fleet reconcile |
+
+## Add one to your fleet (manager worktree)
+```
+BOT_ROLE=manager template/scripts/add-example.sh tracker tracker "Tracker" <platform-id>
+grep -rn '<' bots/tracker      # fill remaining placeholders
+template/scripts/validate.sh && template/scripts/sync.sh "add tracker from example"
+template/scripts/worktree.sh tracker
+```
+`add-example.sh` copies `examples/<example>` to `bots/<slug>`, fills `<me>`, `<wt>`, the name and id, and adds a worker entry to `manager/fleet.json`. Then paste `instructions.md` into the bot's platform instructions and create its routines from `routines/*.json` (they ship `paused`).
+
+## Contributing an example
+Start from a working bot, strip all personal data (names, emails, addresses, account/order/tracking numbers, private repo names, paths specific to you, confidential content, secrets), replace specifics with `<placeholders>`, keep `state.json` empty, and open a PR. `examples/` is template-owned and arrives with upgrades.

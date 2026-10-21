@@ -14,7 +14,7 @@ if [ -z "${BOT_FLEET_UPGRADE_REEXEC:-}" ]; then
   tmp="$(mktemp)"; git show "v$target:template/scripts/upgrade.sh" > "$tmp"
   BOT_FLEET_UPGRADE_REEXEC=1 exec bash "$tmp" "$target"
 fi
-TEMPLATE_PATHS="template .github"
+TEMPLATE_PATHS="template .github examples"
 LEGACY_PATHS="rules/common.md rules/README.md docs scripts schema migrations templates AGENT_GUIDE.md RESTORE.md VERSIONING.md CONTRIBUTING.md VERSION"
 for p in $TEMPLATE_PATHS; do git cat-file -e "v$target:$p" 2>/dev/null && git checkout "v$target" -- "$p"; done
 for f in $(git ls-files -- $TEMPLATE_PATHS $LEGACY_PATHS); do

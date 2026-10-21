@@ -1,0 +1,7 @@
+{
+  "name": "weekly-vault-cleanup",
+  "schedule": "<minute> <hour> * * 0",
+  "timezone": "<timezone>",
+  "status": "paused",
+  "prompt": "Clean up (lint) the Obsidian vault at <vault-path>, following AGENTS.md, including its writing and linking rules. Don't touch the bot-owned folder (<bot-folder>); the daily compliance pass handles it (index links are fine). Start with a backup: a git commit, or a copy at _backup/<date> outside the synced folder or excluded from sync. Skip any note edited in the last 24 hours. Fix and fill properties, normalize tags, add cross-links, fix broken links and update the index pages. Sweep for stale or hard-to-read summaries, topic mentions that should be inline links, and notes holding content that belongs elsewhere; add missing inline links directly and put summary rewrites and content moves in a proposal note. Flag duplicates, contradictions and stale notes, but don't merge them. Write Meta/Changelog/<YYYY-Www>.md. Big rewrites, merges, moves, renames, deletes and layout changes go into the proposal note with a short message to the user, and happen only after approval. Check the sync log at the end. Message the user only when there are proposals or notable fixes."
+}

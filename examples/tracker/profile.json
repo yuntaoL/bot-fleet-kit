@@ -1,0 +1,8 @@
+{
+  "name": "Tracker",
+  "id": "<platform-id>",
+  "title": "",
+  "description": "Check-until-done queue for the other bots: checks each open request (e.g. a shipment) every ~15 minutes until it reaches its expected status, hits max checks or expires, then reports to the requesting bot only. Copy the full text from instructions.md into the platform instructions.",
+  "settings": {},
+  "status": "active"
+}

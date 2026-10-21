@@ -18,6 +18,9 @@ chk("template/OWNERS.json","owners")
 D="template/defaults"
 chk(f"{D}/bot/profile.json","profile"); chk(f"{D}/bot/state.json","state")
 for r in glob.glob(f"{D}/bot/routines/*.json"): chk(r,"routine")
+for e in glob.glob("examples/*/"):
+    chk(f"{e}profile.json","profile"); chk(f"{e}state.json","state")
+    for r in glob.glob(f"{e}routines/*.json"): chk(r,"routine")
 for r in ["template/rules/common.md","template/rules/README.md"]+[f"{D}/roles/{x}.md" for x in ["manager","builder","worker","retired"]]:
     if not os.path.exists(r): err+=1; print(f"FAIL missing {r}")
 F="manager/fleet.json"
