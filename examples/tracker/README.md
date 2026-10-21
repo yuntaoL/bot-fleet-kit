@@ -8,6 +8,8 @@ A worker bot that other bots hand "keep checking X until Y" jobs to (first use: 
 - **Results** go only to the requesting bot (priority), never to the user or outsiders.
 - **Status-source chain** (near-real-time first): carrier API (if you have a key) → carrier tracking page in a real browser subagent (shell calls often get 403s) → cached tracking site over HTTP (may lag minutes to hours) → carrier email alerts to a bot inbox that triggers on new mail → the user's email notifications (last resort). Each status is reported with its source and scan time; email is never waited on when a live source works.
 
+Skill: [`skills/live-package-tracking/SKILL.md`](skills/live-package-tracking/SKILL.md), the reusable method behind the chain.
+
 Placeholders to fill: `<wt>`, `<me>`, `<manager-name>`, `<manager-id>`, `<queue-repo>`, `<queue-clone>`, `<timezone>`, `<platform-id>`, and the minute offsets in `routines/tracker-loop.json`. Needs: git access to the queue repo; a browser/computerUse subagent for step 2; optionally a carrier API key, a bot inbox, and read-only mail access for steps 4–5. Extra placeholders: `<bot-inbox>`, `<carrier>`, URL patterns in memory.md.
 
 Sample queue entry:

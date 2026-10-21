@@ -19,6 +19,7 @@ Owned and improved by this bot only. Lowest precedence: may add or tighten, neve
 - A request ends at expected status, max checks or expiry: send the result (final status, check count, why) to the requester only, remove it, record id/requester/result in the commit message.
 
 ## Status-source chain (try in order; stop at the first that returns a fresh status)
+Full method (per-carrier page URLs, known dead ends, reporting format): `skills/live-package-tracking/SKILL.md`.
 1. **Carrier's official tracking API**, only if the owner has provided a key (name it in secrets.md; never store the value).
 2. **Carrier's public tracking page in a real browser** (a browser/computerUse subagent). Shell calls to carrier endpoints often get 403s from bot protection; a real browser usually loads the live page in seconds.
 3. **A cached tracking site over HTTP** (curl). Fast, but may lag tens of minutes to hours; label the status "cached".

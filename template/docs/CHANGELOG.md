@@ -1,5 +1,9 @@
 # Changelog (template)
 
+## 0.5.3 – 2026-10-21
+- examples/tracker: new skill `skills/live-package-tracking/SKILL.md` (source chain, public tracking-page URL patterns per carrier, known shell dead ends, reporting format); rules.md and the tracker-loop routine point to it. examples/README.md notes that `skills/` and `routines/` are the most reusable parts and can be copied alone.
+- No migration. Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.5.3`.
+
 ## 0.5.2 – 2026-10-21
 - examples/tracker: email fallback replaced by a near-real-time **status-source chain**: carrier API (if keyed) → carrier tracking page in a real browser subagent → cached tracking site over HTTP (may lag) → carrier alerts to a bot inbox → user's email notifications (last resort). New rule: report source and scan time with every status; never wait on email when a live source works. Updated rules.md, memory.md, instructions.md, README and the tracker-loop routine.
 - No migration (examples are fetched by add-example.sh, never copied into fleets). Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.5.2`.
