@@ -1,5 +1,9 @@
 # Changelog (template)
 
+## 0.3.2 – 2026-10-21
+- upgrade.sh: finds the target's upgrade script at `template/scripts/upgrade.sh` (0.4.0 layout) or `scripts/upgrade.sh`. **Stepping stone: fleets must be on 0.3.2 before upgrading to 0.4.0.**
+- No migration. Upgrade: `BOT_ROLE=manager scripts/upgrade.sh 0.3.2`.
+
 ## 0.3.1 – 2026-10-21
 - check-boundary.sh: the manager may replace a `bots/<x>/rules.md` that is still the untouched starter (seeding). Previously the 0.3.0 migration created starters and then nobody but the bot could seed them. Once a bot edits its file, only it can change it.
 - No migration. Upgrade: `BOT_ROLE=manager scripts/upgrade.sh 0.3.1`.

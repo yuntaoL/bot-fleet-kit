@@ -9,7 +9,7 @@ current="$(cat VERSION 2>/dev/null || echo 0.0.0)"
 git fetch upstream "refs/tags/v$target:refs/tags/v$target" --force
 # Re-exec with the TARGET version's upgrade.sh so its path list and logic apply.
 if [ -z "${BOT_FLEET_UPGRADE_REEXEC:-}" ]; then
-  tmp="$(mktemp)"; git show "v$target:scripts/upgrade.sh" > "$tmp"
+  tmp="$(mktemp)"; git show "v$target:template/scripts/upgrade.sh" > "$tmp" 2>/dev/null || git show "v$target:scripts/upgrade.sh" > "$tmp"
   BOT_FLEET_UPGRADE_REEXEC=1 exec bash "$tmp" "$target"
 fi
 TEMPLATE_PATHS="rules/common.md rules/README.md docs scripts schema migrations templates .github"
