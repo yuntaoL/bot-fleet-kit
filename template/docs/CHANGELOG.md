@@ -1,5 +1,13 @@
 # Changelog (template)
 
+## 0.6.0 – 2026-10-21
+- **Principle-first rules.** New `template/docs/WRITING_RULES.md`: state intent and why, a few illustrative examples (never the boundary), the judgment test ("would the owner be uncomfortable seeing this stored or shared?"), concrete rules only for hard safety lines or learned failures, keep rules short.
+- `template/rules/common.md` rewritten in that style: three hard lines (nothing goes out without approval; no secrets; keep out anything sensitive, private or not yours to store), fleet mechanics, and learned habits. Same obligations, fewer items.
+- Role defaults (`template/defaults/roles/*.md`) and the starter `bots/<me>/rules.md` rephrased as principles. Existing fleets: upgrade.sh lists role-default differences; merge by hand.
+- examples/tracker and examples/notes-keeper rules and anti-jobs rewritten as principles.
+- **Audit:** `template/docs/AUDIT.md` (weekly manager checklist) and `template/scripts/audit.sh` (read-only: validate, folder/routine/state freshness, sensitive-pattern grep, heuristic for enumerating rules). CI also runs audit.sh (report only).
+- No migration. Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.6.0`.
+
 ## 0.5.3 – 2026-10-21
 - examples/tracker: new skill `skills/live-package-tracking/SKILL.md` (source chain, public tracking-page URL patterns per carrier, known shell dead ends, reporting format); rules.md and the tracker-loop routine point to it. examples/README.md notes that `skills/` and `routines/` are the most reusable parts and can be copied alone.
 - No migration. Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.5.3`.

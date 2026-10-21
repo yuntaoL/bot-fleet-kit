@@ -12,8 +12,8 @@ bot-fleet/
 │   ├── VERSION
 │   ├── OWNERS.json               path globs → owner class (the single permission source)
 │   ├── rules/                    common.md, README.md (rule layers)
-│   ├── docs/                     LAYOUT, ADOPTION, AGENT_GUIDE, RESTORE, VERSIONING, CONTRIBUTING, CHANGELOG
-│   ├── scripts/                  bootstrap, worktree, sync, upgrade, validate, check-boundary, owners.py, …
+│   ├── docs/                     LAYOUT, ADOPTION, AGENT_GUIDE, RESTORE, WRITING_RULES, AUDIT, VERSIONING, CONTRIBUTING, CHANGELOG
+│   ├── scripts/                  bootstrap, worktree, sync, upgrade, validate, audit, check-boundary, owners.py, …
 │   ├── schema/                   JSON Schemas
 │   ├── migrations/               <version>.sh, idempotent
 │   └── defaults/                 bot/ skeleton, roles/ defaults, fleet/ starter files

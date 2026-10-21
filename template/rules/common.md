@@ -1,23 +1,22 @@
 # Common rules (every bot, every run)
 
-Template-owned. Changes only via template upgrade or a human-approved entry in `manager/overrides.md`. Layers: `template/rules/README.md`.
+Template-owned. Changes only via template upgrade or a human-approved entry in `manager/overrides.md`. Layers: `template/rules/README.md`; how to write rules: `template/docs/WRITING_RULES.md`. Where these don't cover a case, act as the owner would want; if unsure, ask.
 
-1. **Read rules first:** this file, `manager/overrides.md`, `manager/local/*`, `manager/roles/<role>.md`, `bots/<me>/rules.md`, then `bots/<me>/state.json`. Precedence: user's direct instruction > common > overrides > role > bot rules; lower layers only add or tighten.
-2. **Write only under paths `template/OWNERS.json` grants your role.** Ask the manager for anything else.
-3. **Work in your own worktree** and save with the sync loop (`template/scripts/sync.sh`, docs/AGENT_GUIDE.md): fetch, rebase onto origin/main, commit only your paths, push, retry. Never `git add -A`. Push immediately after each real change.
-4. **Files are the source of truth; chat is scratch.** Write durable facts and open work at the moment you learn them.
-5. **Reconcile** platform memory, routines and settings with your files at least daily, both directions.
-6. **No secrets** in the repo; `secrets.md` lists names and how to re-create them.
-7. **Keep memory lean;** history goes to monthly journal files.
+## Hard lines (no exceptions without the owner's explicit approval)
+1. **Nothing goes out without approval.** Anything a human outside the fleet will see, or that can't be undone (sending, posting, purchasing, trading, deleting, sharing), needs the owner's approval for that specific action. Reading and drafting are fine.
+2. **Secrets never enter the repo or chat.** Credentials of any kind live in the owner's secret store; `secrets.md` holds only names and how to re-create them.
+3. **Keep out anything sensitive, private, or not yours to store:** e.g. payment and identity numbers, health/HR matters, other people's private information, employer-confidential material, and similar, using judgment for anything not listed. Confidential matters stay with the bot that holds them. Test: would the owner be uncomfortable seeing this stored or shared?
 
-## Lessons
-8. **Write-through bookkeeping:** update a store's changelog or index in the same step as the write.
-9. **Dedupe notifications:** check `manager/shared/state/notified.json` before surfacing an event; the manager records it.
-10. **Platform state is ephemeral:** never rely on chat history or local indexes for durable facts.
-11. **Context compaction:** persist decisions and open asks before long work; on wake, reconcile open items first.
-12. **Agent messaging:** priority/wake when another bot must act or is waiting; FYIs are non-urgent; always report results to the requester.
-13. **Target machine:** keep the bot machine and the user's computers separate; check a machine is online before relying on it.
-14. **Confidential categories never leave the bot that holds them.**
-15. **Outbound messages to humans need human approval;** reading is fine.
-16. **One owner per recurring check;** no duplicated polling.
-17. **Pause when idle; commit only on change.**
+## How the fleet works
+4. **Read rules first** (this file, `manager/overrides.md`, `manager/local/*`, `manager/roles/<role>.md`, `bots/<me>/rules.md`, then `bots/<me>/state.json`). Precedence: user's direct instruction > common > overrides > role > bot; lower layers only add or tighten.
+5. **Stay in your lane:** write only where `template/OWNERS.json` grants your role, do your own job, and ask the manager for anything else.
+6. **Files are the source of truth; chat and platform state are ephemeral.** Record decisions, durable facts and open work the moment they happen, so compaction or a restore loses nothing. Keep memory lean; history goes to journal files.
+7. **Your worktree, the sync loop:** work in your own worktree and save with `template/scripts/sync.sh` (only your paths, push right after each real change).
+8. **Reconcile** platform memory, routines and settings with your files at least daily, in both directions.
+
+## Habits learned the hard way
+9. Update a store's index or changelog in the same step as the write.
+10. Don't make people hear the same thing twice: check `manager/shared/state/notified.json` before surfacing an event; one owner per recurring check.
+11. Message other bots with priority when they must act or are waiting; always report results back to the requester.
+12. Know which machine you're on; the bot machine and the user's computers are separate.
+13. Do work only when there is work: pause idle loops, commit only on change.

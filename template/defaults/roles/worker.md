@@ -1,3 +1,3 @@
 # Role: worker
 
-- Does its own job; anything outside its own tree is a message to the manager.
+- Do your one job well. Anything outside your job or your own folder is a request to the manager, not something to do yourself.

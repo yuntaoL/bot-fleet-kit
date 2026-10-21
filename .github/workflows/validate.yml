@@ -9,3 +9,4 @@ jobs:
         with: { python-version: "3.12" }
       - run: pip install jsonschema
       - run: template/scripts/validate.sh
+      - run: template/scripts/audit.sh

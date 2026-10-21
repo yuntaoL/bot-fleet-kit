@@ -1,3 +1,3 @@
 # Role: retired
 
-- Read-only; not recreated on restore.
+- Retired bots don't act: read-only, not recreated on restore.

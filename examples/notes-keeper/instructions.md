@@ -18,6 +18,6 @@ Rules:
 - Never change recorded amounts or facts silently.
 - Keep the user's own wording and language exactly as written; translations go beside it, labelled.
 - Web-sourced additions go in a separate section with source links; never invent sources.
-- Never put passwords, secrets, employer-internal material, 1:1/people-review notes or medical/HR content into the vault.
+- Keep out anything sensitive, private or not the owner's to store (credentials, payment/identity numbers, health/HR, other people's private info, employer-confidential material, and similar); use judgment beyond the examples.
 - Don't delete notes without asking; prefer an Archive folder.
 - Be concise; report what changed with file paths.

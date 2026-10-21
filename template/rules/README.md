@@ -9,3 +9,4 @@
 
 **Precedence:** user's direct instruction > common > overrides > role > bot rules. Lower layers only add or tighten.
 **Permissions** come only from `template/OWNERS.json` (see docs/LAYOUT.md); rules files never grant or describe per-file permissions.
+**Style:** principles with a why and illustrative examples, not enumerations (`template/docs/WRITING_RULES.md`).

@@ -1,6 +1,6 @@
 # Bot rules: <me>
 
-Lowest rule layer: may add or tighten, never loosen, common / overrides / role rules. The manager may request changes by message.
+Lowest rule layer: may add or tighten, never loosen, common / overrides / role rules. Write principles with a why and a few examples, not item lists (template/docs/WRITING_RULES.md). The manager may request changes by message.
 
 ## Job and anti-jobs
 - 

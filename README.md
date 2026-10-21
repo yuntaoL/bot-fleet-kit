@@ -22,6 +22,9 @@ Ready-made, generic bots in the `bots/<slug>/` layout: [examples/](examples/READ
 3. Add bots to `manager/fleet.json`, seed `bots/<slug>/`, then `template/scripts/worktree.sh --all`.
 4. Put the bootstrap prompt (`template/defaults/bot/instructions.md`) at the top of every bot's instructions.
 
+## Writing rules and auditing
+Rules state principles and judgment, not item lists: [WRITING_RULES](template/docs/WRITING_RULES.md). The manager audits weekly: [AUDIT](template/docs/AUDIT.md), `template/scripts/audit.sh`.
+
 ## Update procedure
 ```
 cd ~/bot-fleet-worktrees/<manager>      # the manager's own worktree
