@@ -1,5 +1,15 @@
 # Changelog (template)
 
+## 0.3.0 – 2026-10-21
+- **Rule layers** (rules/README.md): common (template, upgrade-only) > overrides (`rules/local/overrides.md`, human-approved entries with date/approver/exact text) > role (`rules/roles/`, now **fleet-owned**, manager-only) > bot (`bots/<me>/rules.md`, bot-owned). User's direct instruction beats all; lower layers only add/tighten.
+- Role defaults moved to `templates/rules/roles/`; copied on adoption; upgrades print a diff, never overwrite. Manager boundaries now live in `rules/roles/manager.md`.
+- `rules/common.md`: 10 genericized lessons (write-through bookkeeping, notification dedupe via `shared/state/notified.json`, ephemeral platform state, compaction, agent messaging, target machine, confidential categories, outbound approval, single owner for recurring checks, pause-when-idle).
+- check-boundary.sh: template-owned files only via upgrade (`BOT_FLEET_UPGRADE=1`); `bots/<x>/rules.md` modifiable only by bot x (others may only create).
+- validate.sh: rules/README.md, role files, overrides entry fields, rules.md for every non-retired bot.
+- Bootstrap prompt now includes `bots/<me>/rules.md` and precedence.
+- Migration `0.3.0.sh`: keeps existing rules/roles/, adds missing defaults, overrides.md, notified.json, starter rules.md, updates bootstrap prompts, fixes profile.json trailing newlines.
+- Upgrade: `BOT_ROLE=manager scripts/upgrade.sh 0.3.0`. After upgrading, move any fleet-specific manager boundaries into `rules/roles/manager.md`.
+
 ## 0.2.0 – 2026-10-21
 **Breaking (migration included).**
 - Two-layer rules: `rules/common.md` + `rules/roles/{manager,builder,worker,retired}.md` (template-owned) and user-owned `rules/local/` overlay (manager-only).

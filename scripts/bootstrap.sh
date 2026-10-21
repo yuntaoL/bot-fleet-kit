@@ -12,6 +12,6 @@ python3 -c "import jsonschema" 2>/dev/null || pip install -q jsonschema 2>/dev/n
 [ -f templates/fleet/README.md ] && [ "$(basename "$(git remote get-url origin 2>/dev/null)" .git)" != "bot-fleet-template" ] && scripts/init-fleet-docs.sh
 if [ ! -f fleet.json ]; then
   printf '{\n  "schemaVersion": 2,\n  "owner": "",\n  "templateVersion": "%s",\n  "bots": []\n}\n' "$(cat VERSION)" > fleet.json
-  git add -A fleet.json README.md CHANGELOG.md rules/local && BOT_ROLE=manager git commit -qm "manager: bootstrap fleet.json" && echo "bootstrap: committed fleet.json (push when ready)"
+  git add -A fleet.json README.md CHANGELOG.md rules shared && BOT_ROLE=manager git commit -qm "manager: bootstrap fleet.json" && echo "bootstrap: committed fleet.json (push when ready)"
 fi
 echo "bootstrap: done. Bots commit with BOT_NAME=<slug>; the fleet manager with BOT_ROLE=manager."

@@ -6,9 +6,11 @@ A git-backed pattern for **backing up and restoring a fleet of AI assistant bots
 
 ## Layout
 ```
-rules/common.md        rules every bot follows         (template)
-rules/roles/<role>.md  manager | builder | worker | retired (template)
-rules/local/           fleet-specific overlay          (yours, manager-only)
+rules/README.md        rule layers + precedence          (template)
+rules/common.md        rules every bot follows           (template, upgrade-only)
+rules/local/           overrides.md (human-approved) + fleet additions (yours, manager-only)
+rules/roles/<role>.md  role rules (yours, manager-only; defaults in templates/rules/roles/)
+bots/<me>/rules.md     each bot's own rules (that bot only)
 docs/                  ADOPTION, AGENT_GUIDE, RESTORE, VERSIONING, CONTRIBUTING, CHANGELOG (template)
 schema/ scripts/ migrations/ templates/ .github/       (template)
 fleet.json  bots/<slug>/  shared/  README.md  CHANGELOG.md   (yours)
