@@ -15,6 +15,9 @@ while read -r s f; do
   owner="${BASH_REMATCH[1]}"
   [ "${BOT_NAME:-}" = "$owner" ] && continue
   [ "$s" = "A" ] && { [ "$role" = manager ] || [ "$role" = builder ] || [ "${BOT_FLEET_UPGRADE:-}" = 1 ]; } && continue
+  # Manager may replace an untouched starter (HEAD still equals templates/bot/rules.md) to seed it.
+  if [ "$s" = "M" ] && [ "$role" = manager ] && [ -f templates/bot/rules.md ] && \
+     [ "$(git show "HEAD:$f" 2>/dev/null)" = "$(sed "s/<me>/$owner/" templates/bot/rules.md)" ]; then continue; fi
   fail "only $owner edits $f (others request changes by message)"
 done <<< "$st"
 [ "$role" = "manager" ] && exit 0

@@ -1,5 +1,9 @@
 # Changelog (template)
 
+## 0.3.1 – 2026-10-21
+- check-boundary.sh: the manager may replace a `bots/<x>/rules.md` that is still the untouched starter (seeding). Previously the 0.3.0 migration created starters and then nobody but the bot could seed them. Once a bot edits its file, only it can change it.
+- No migration. Upgrade: `BOT_ROLE=manager scripts/upgrade.sh 0.3.1`.
+
 ## 0.3.0 – 2026-10-21
 - **Rule layers** (rules/README.md): common (template, upgrade-only) > overrides (`rules/local/overrides.md`, human-approved entries with date/approver/exact text) > role (`rules/roles/`, now **fleet-owned**, manager-only) > bot (`bots/<me>/rules.md`, bot-owned). User's direct instruction beats all; lower layers only add/tighten.
 - Role defaults moved to `templates/rules/roles/`; copied on adoption; upgrades print a diff, never overwrite. Manager boundaries now live in `rules/roles/manager.md`.
