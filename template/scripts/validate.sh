@@ -18,7 +18,8 @@ chk("template/OWNERS.json","owners")
 D="template/defaults"
 chk(f"{D}/bot/profile.json","profile"); chk(f"{D}/bot/state.json","state")
 for r in glob.glob(f"{D}/bot/routines/*.json"): chk(r,"routine")
-for e in glob.glob("examples/*/"):
+F0="manager/fleet.json"
+for e in ([] if os.path.exists(F0) else glob.glob("examples/*/")):  # examples validated only in the template repo
     chk(f"{e}profile.json","profile"); chk(f"{e}state.json","state")
     for r in glob.glob(f"{e}routines/*.json"): chk(r,"routine")
 for r in ["template/rules/common.md","template/rules/README.md"]+[f"{D}/roles/{x}.md" for x in ["manager","builder","worker","retired"]]:

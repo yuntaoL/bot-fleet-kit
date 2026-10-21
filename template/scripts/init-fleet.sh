@@ -11,3 +11,4 @@ for f in $D/roles/*.md; do [ -f "manager/roles/$(basename "$f")" ] || { cp "$f" 
 [ -f manager/shared/state/notified.json ] || { cp $D/fleet/notified.json manager/shared/state/notified.json; echo "init: notified.json"; }
 [ -f manager/fleet.json ] || { printf '{\n  "schemaVersion": 2,\n  "owner": "",\n  "templateVersion": "%s",\n  "bots": []\n}\n' "$(cat template/VERSION)" > manager/fleet.json; echo "init: manager/fleet.json"; }
 touch manager/local/.gitkeep manager/shared/skills/.gitkeep
+[ -d examples ] && echo "note: examples/ is template-repo only (fleets fetch examples with add-example.sh); remove it by hand if unneeded: git rm -r examples" || true

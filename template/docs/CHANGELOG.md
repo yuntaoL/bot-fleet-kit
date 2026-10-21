@@ -1,5 +1,11 @@
 # Changelog (template)
 
+## 0.5.1 – 2026-10-21
+- **examples/ never lands in a fleet.** It lives only in the template repo. upgrade.sh no longer copies `examples/` and never deletes it; if a fleet already has one (e.g. from 0.5.0 or "Use this template"), upgrade.sh and init-fleet.sh print a note so you can `git rm -r examples` by hand.
+- add-example.sh fetches the example from the public template (shallow clone of tag `v<version>` into a temp dir; default version = `template/VERSION`, override with `EXAMPLE_VERSION`; repo = `TEMPLATE_URL`, else the `upstream` remote) instead of a local `examples/`.
+- validate.sh checks `examples/` only in the template repo (no `manager/fleet.json`); fleets don't need it. OWNERS.json keeps `examples/**` as template-owned (read-only if present in a fleet).
+- No migration. Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.5.1`.
+
 ## 0.5.0 – 2026-10-21
 - **Examples:** new template-owned `examples/` with two generic, shareable bot packages in the `bots/<slug>/` layout: `examples/tracker` (check-until-done queue in a private git repo, 15-min loop that pauses when idle, expiry/max checks/expected status, dedupe, results only to the requester, email fallback when a carrier blocks scripted tracking) and `examples/notes-keeper` (Obsidian vault manager: AGENTS.md rules file, index pages, changelog row per write, `00 Inbox/` filing daily, weekly cleanup, fleet reconcile). Routine prompts are templates with `<placeholders>`; routines ship `paused`.
 - `template/scripts/add-example.sh <example> <slug> [name] [platform-id]` (manager): copies an example to `bots/<slug>`, fills `<me>`/`<wt>`/`<role>`/name/id, registers a worker in `manager/fleet.json`. Does not commit.

@@ -14,7 +14,7 @@ if [ -z "${BOT_FLEET_UPGRADE_REEXEC:-}" ]; then
   tmp="$(mktemp)"; git show "v$target:template/scripts/upgrade.sh" > "$tmp"
   BOT_FLEET_UPGRADE_REEXEC=1 exec bash "$tmp" "$target"
 fi
-TEMPLATE_PATHS="template .github examples"
+TEMPLATE_PATHS="template .github"   # examples/ is template-repo only: never copied, never deleted
 LEGACY_PATHS="rules/common.md rules/README.md docs scripts schema migrations templates AGENT_GUIDE.md RESTORE.md VERSIONING.md CONTRIBUTING.md VERSION"
 for p in $TEMPLATE_PATHS; do git cat-file -e "v$target:$p" 2>/dev/null && git checkout "v$target" -- "$p"; done
 for f in $(git ls-files -- $TEMPLATE_PATHS $LEGACY_PATHS); do
@@ -34,4 +34,5 @@ chmod +x template/scripts/*.sh; template/scripts/install-hook.sh
 template/scripts/validate.sh || echo "WARNING: validation failed, review before pushing"
 git add -A
 BOT_FLEET_UPGRADE=1 BOT_ROLE=manager git commit -qm "chore: upgrade template $current -> $target"
+[ -d examples ] && echo "note: this fleet has an examples/ folder; it is template-repo only and not managed by upgrades. Remove it by hand if you do not need it (git rm -r examples)." || true
 echo "Upgraded $current -> $target. Review with 'git show --stat', then: git push origin HEAD:main"

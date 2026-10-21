@@ -7,7 +7,7 @@ bot-fleet/
 ├── README.md                     manager   fleet landing page (GitHub only renders a root README)
 ├── LICENSE                       manager
 ├── .github/workflows/            template  CI: validate.sh (GitHub requires this path)
-├── examples/                     template  shareable bot packages (bots/<slug>/ layout), see examples/README.md
+├── examples/                     template  template repo ONLY (not copied to fleets); add-example.sh fetches from here
 ├── template/                     template  changed ONLY by template/scripts/upgrade.sh
 │   ├── VERSION
 │   ├── OWNERS.json               path globs → owner class (the single permission source)

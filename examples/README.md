@@ -14,7 +14,7 @@ grep -rn '<' bots/tracker      # fill remaining placeholders
 template/scripts/validate.sh && template/scripts/sync.sh "add tracker from example"
 template/scripts/worktree.sh tracker
 ```
-`add-example.sh` copies `examples/<example>` to `bots/<slug>`, fills `<me>`, `<wt>`, the name and id, and adds a worker entry to `manager/fleet.json`. Then paste `instructions.md` into the bot's platform instructions and create its routines from `routines/*.json` (they ship `paused`).
+`add-example.sh` fetches `examples/<example>` from the public template at your fleet's `template/VERSION` (override: `EXAMPLE_VERSION=0.5.1`), copies it to `bots/<slug>`, fills `<me>`, `<wt>`, the name and id, and adds a worker entry to `manager/fleet.json`. Then paste `instructions.md` into the bot's platform instructions and create its routines from `routines/*.json` (they ship `paused`).
 
 ## Contributing an example
-Start from a working bot, strip all personal data (names, emails, addresses, account/order/tracking numbers, private repo names, paths specific to you, confidential content, secrets), replace specifics with `<placeholders>`, keep `state.json` empty, and open a PR. `examples/` is template-owned and arrives with upgrades.
+Start from a working bot, strip all personal data (names, emails, addresses, account/order/tracking numbers, private repo names, paths specific to you, confidential content, secrets), replace specifics with `<placeholders>`, keep `state.json` empty, and open a PR. `examples/` exists only in this template repo; it is never copied into fleets (add-example.sh fetches from here).

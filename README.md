@@ -10,11 +10,11 @@ template/      template-owned (upgrade only): rules/common.md, OWNERS.json, docs
 manager/       manager-owned: fleet.json, roles/, overrides.md, local/, shared/, CHANGELOG.md
 bots/<slug>/   owned by that bot
 README.md, LICENSE (manager) · .github/ (template)
-examples/      template-owned: shareable bot packages (tracker, notes-keeper)
+examples/      template repo only (never copied to fleets): shareable bot packages
 ```
 
 ## Examples
-Ready-made, generic bots in the `bots/<slug>/` layout: [examples/](examples/README.md). Add one with `BOT_ROLE=manager template/scripts/add-example.sh <example> <slug> [name] [platform-id]`, fill the remaining `<placeholders>`, validate and commit.
+Ready-made, generic bots in the `bots/<slug>/` layout: [examples/](examples/README.md). Fleets don't carry this folder; add one with `BOT_ROLE=manager template/scripts/add-example.sh <example> <slug> [name] [platform-id]`, fill the remaining `<placeholders>`, validate and commit.
 
 ## Adoption (summary; full steps in [template/docs/ADOPTION.md](template/docs/ADOPTION.md))
 1. *Use this template* → **Private** repo; clone to the shared bot machine; set git identity.
