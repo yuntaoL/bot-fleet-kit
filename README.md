@@ -39,7 +39,7 @@ Restoring after a loss: tell a fresh bot **"Clone <repo> and follow RESTORE.md."
 cd ~/bot-fleet
 git remote -v | grep upstream || git remote add upstream https://github.com/<owner>/bot-fleet-template.git
 git pull --rebase                      # clean tree, up to date
-BOT_ROLE=manager scripts/upgrade.sh 0.1.1
+BOT_ROLE=manager scripts/upgrade.sh <version>   # e.g. 0.1.2
 git show --stat                         # review
 git push
 ```

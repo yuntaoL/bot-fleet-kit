@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2 – 2026-10-21
+- upgrade.sh: re-executes the **target** version's upgrade.sh after fetching, so new template-owned paths (e.g. CONTRIBUTING.md in 0.1.1) are picked up. Forks that ran 0.1.1 with the 0.1.0 script were missing CONTRIBUTING.md; upgrading to 0.1.2 restores it.
+- No migration. Upgrade: `BOT_ROLE=manager scripts/upgrade.sh 0.1.2`.
+
 ## 0.1.1 – 2026-10-21
 Fixes from the first real adoption (friction log):
 - README: full step-by-step **Adoption guide** and **Update procedure**.

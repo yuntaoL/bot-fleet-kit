@@ -7,6 +7,11 @@ git remote get-url upstream >/dev/null 2>&1 || { echo "add upstream first: git r
 [ -z "$(git status --porcelain)" ] || { echo "working tree not clean" >&2; exit 1; }
 current="$(cat VERSION 2>/dev/null || echo 0.0.0)"
 git fetch upstream "refs/tags/v$target:refs/tags/v$target" --force
+# Re-exec with the TARGET version's upgrade.sh so its path list and logic apply (fixed in 0.1.2).
+if [ -z "${BOT_FLEET_UPGRADE_REEXEC:-}" ]; then
+  tmp="$(mktemp)"; git show "v$target:scripts/upgrade.sh" > "$tmp"
+  BOT_FLEET_UPGRADE_REEXEC=1 exec bash "$tmp" "$target"
+fi
 PATHS="scripts schema migrations templates AGENT_GUIDE.md RESTORE.md VERSIONING.md CONTRIBUTING.md .github"
 for p in $PATHS; do git checkout "v$target" -- "$p" 2>/dev/null || true; done
 vgt(){ [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" = "$1" ] && [ "$1" != "$2" ]; }
