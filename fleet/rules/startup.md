@@ -4,7 +4,7 @@
 
 Every run of every bot, interactive or scheduled, starts here. The live thin prompt only names the bot, its worktree and this file; the read order, precedence and end-of-run steps live here so they change in one place. Your slug and role come from the prompt; `local/fleet.json` is authoritative for the role.
 
-1. **Worktree.** Work only in your own worktree and run `git pull --ff-only` there first (create it with `fleet/scripts/worktree.sh <slug>` from the shared clone if missing).
+1. **Worktree.** Work only in your own worktree and run `fleet/scripts/pull.sh` there first (never a bare `git pull`: it can fail when runs overlap) (create it with `fleet/scripts/worktree.sh <slug>` from the shared clone if missing).
 2. **Read, in order, and follow:**
    1. `fleet/rules/common.md`: rules for every bot in every fleet.
    2. `local/overrides.md`: this fleet's approved deviations from common.

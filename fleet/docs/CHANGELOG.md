@@ -4,7 +4,9 @@
 
 - **Rules:** each `fleet/rules/*.md` now opens with one line saying `<slug>`, `<role>` and `<routine>` are the bot's own run-time values (from its prompt and `local/fleet.json`), not fill-ins; only `templates/` uses `{{...}}` fill-ins. `<me>` becomes `<slug>` in `fleet/rules/README.md` and `fleet/docs/AGENT_GUIDE.md`.
 - **validate.sh:** fails if a `{{NAME}}` fill-in appears in `fleet/rules/` or `fleet/roles/`.
-- Upgrade: `BOT_ROLE=manager fleet/scripts/upgrade.sh 0.10.2`. No migration, no prompt changes.
+- **Concurrent runs:** new `fleet/scripts/pull.sh` (explicit `git fetch origin main` + `git merge --ff-only origin/main`, retried) replaces bare `git pull --ff-only`, which failed with "Cannot fast-forward to multiple branches" when runs overlapped. `sync.sh` fetches `origin main` explicitly and retries a rejected push with backoff and jitter. Both serialize on a per-worktree `flock` on `<git-dir>/fleet-sync.lock` (skipped if `flock` is missing). `THIN-PROMPT.tmpl`, `ROUTINE-PROMPT.tmpl`, `startup.md`, `routines.md` and `templates/bot/instructions.md` now say `fleet/scripts/pull.sh`.
+- **Private routines:** `fleet/rules/routines.md` documents them: same `.json` and thin prompt, `"private": true` (new optional schema field), name starting `private-`, steps in git-ignored `routines/private-<name>.steps.md` via a per-bot `bots/<slug>/.gitignore` (new `templates/bot/.gitignore`). `validate.sh` and `confidential-scan.sh` fail if such a file is tracked.
+- Upgrade: `BOT_ROLE=manager fleet/scripts/upgrade.sh 0.10.2`. No migration. Prompt change (pull line): re-render with `render-prompt.sh <slug>` and `render-routine-prompt.sh <slug> --all` and re-paste one bot at a time with the owner's yes; old prompts keep working (bare pull still works when runs don't overlap). Copy `templates/bot/.gitignore` into each bot that has private routines.
 
 ## 0.10.1 – 2026-10-30
 
