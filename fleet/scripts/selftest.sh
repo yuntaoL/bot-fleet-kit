@@ -129,4 +129,11 @@ fleet/scripts/validate.sh >/dev/null || die "validate after migration"
 bash fleet/scripts/compat.sh remove >/dev/null 2>&1 && die "compat remove without confirmation"
 BOT_FLEET_REMOVE_COMPAT=1 bash fleet/scripts/compat.sh remove >/dev/null && [ ! -e template ] && [ ! -e manager ] && fleet/scripts/validate.sh >/dev/null || die "compat cleanup"
 cd "$A"; ok "0.10.0 migration (dry-run no-op, layout, rewrite skips journals, old paths resolve, idempotent, validate, compat cleanup)"
+# 0.10.2: concurrent pulls/syncs, private routine steps
+(cd "$A" && fleet/scripts/pull.sh >/dev/null) || die "pull.sh"
+for s in atlas forge; do (cd "$BOT_FLEET_WORKTREES/$s" && fleet/scripts/pull.sh >/dev/null && for k in 1 2 3; do (mkdir -p bots/$s/kb && echo "r$k" > bots/$s/kb/race-$k.md && fleet/scripts/pull.sh >/dev/null; fleet/scripts/sync.sh "race $k" >/dev/null) & done; wait) & done; wait
+(cd "$A" && fleet/scripts/pull.sh >/dev/null && for s in atlas forge; do [ -f bots/$s/kb/race-1.md ] && [ -f bots/$s/kb/race-3.md ] || exit 1; done) || die "concurrent sync"
+(cd "$A" && mkdir -p bots/atlas/routines && cp templates/bot/.gitignore bots/atlas/.gitignore && echo secret > bots/atlas/routines/private-x.steps.md && git add bots/atlas && git status --porcelain | grep -q private-x && exit 1
+  git add -f bots/atlas/routines/private-x.steps.md && ! fleet/scripts/validate.sh >/dev/null 2>&1 && ! fleet/scripts/confidential-scan.sh --all >/dev/null 2>&1; r=$?; git reset -q; rm -f bots/atlas/routines/private-x.steps.md bots/atlas/.gitignore; exit $r) || die "private steps guard"
+cd "$A"; ok "0.10.2 pull.sh, concurrent sync.sh, private-*.steps.md ignored and guarded"
 echo "selftest: ALL PASS ($T)"

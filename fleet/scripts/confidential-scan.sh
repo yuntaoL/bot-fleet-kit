@@ -4,6 +4,11 @@
 # Usage: confidential-scan.sh [--staged|--all]. Prints path:line only, never the matched text. Exit 1 on hit; 0 if no pattern file.
 set -u
 cd "$(git rev-parse --show-toplevel)"
+# 0.10.2: a tracked or staged private-*.steps.md is always a hit, pattern file or not
+priv="$(git ls-files; git diff --cached --name-only --diff-filter=AM)"
+if printf '%s\n' "$priv" | grep -qE '(^|/)private-[^/]*\.steps\.md$'; then
+  printf '%s\n' "$priv" | grep -E '(^|/)private-[^/]*\.steps\.md$' | sort -u | sed 's/^/confidential-scan: HIT tracked private steps file /' >&2; exit 1
+fi
 dir="${FLEET_PRIVATE_DIR:-$HOME/.fleet-private}"; pat="$dir/confidential-patterns.txt"; allow="$dir/confidential-allow.txt"
 [ -r "$pat" ] || { echo "confidential-scan: no pattern file ($pat); skipping" >&2; exit 0; }
 mode="${1:---staged}"; hits=0
