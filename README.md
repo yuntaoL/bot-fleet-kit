@@ -1,16 +1,16 @@
-# bot-fleet-template
+# bot-fleet-kit
 
 **Give your AI assistant bots a shared git brain, so they remember, stay in sync and work as a team.**
 
 AI assistant bots forget. Chats get compacted, platform memory is a black box, and instructions drift every time someone edits a prompt. Run more than one bot and it gets worse: nobody knows which bot owns which job, and nothing stops one bot from overwriting another's notes.
 
-This template turns a private git repo into the durable home of your whole fleet. Every bot re-reads its rules and state from files on every run, writes back what it learns, and can be restored from scratch with one sentence. Permissions follow the folder structure, and template upgrades reach every bot the same way.
+This kit turns a private git repo into the durable home of your whole fleet. Every bot re-reads its rules and state from files on every run, writes back what it learns, and can be restored from scratch with one sentence. Permissions follow the folder structure, and template upgrades reach every bot the same way.
 
 > Built for Grok Bot fleets, but the pattern works for any assistant that can run a shell and git.
 
 ## Why this exists
 
-These all happened in the fleet this template came from:
+These all happened in the fleet this kit came from:
 
 - **The calendar fix it forgot.** The assistant walked its owner through setting up calendar access, then later went back to the old calendar because an older note still said the main one was unreachable. *Fix:* one current fact per file, dated, so the newer fact replaces the old one instead of competing with it.
 - **The saved login it didn't know about.** The owner had already stored a card and a travel-site login in the assistant's vault, but it didn't use them until told explicitly. *Fix:* the bot's files record which services and credentials are set up (never the secrets), and bots check them before asking.
@@ -64,9 +64,9 @@ Names are yours to choose. "Chief" and "dr eggbot" are just suggestions; scripts
 ### Option A: let your bot do it (✅ two-phase bootstrap)
 You start with one bot and talk to it. You only sign in to GitHub yourself (`gh auth login` on the bots' machine); bots never handle your passwords or tokens.
 
-**Phase 1: pre-fleet.** Ask your bot: *"Follow fleet/docs/install-manager.md from https://github.com/yuntaoL/bot-fleet-template."*
+**Phase 1: pre-fleet.** Ask your bot: *"Follow fleet/docs/install-manager.md from https://github.com/yuntaoL/bot-fleet-kit."*
 - It asks for names (Chief suggested) and your display name, checks prerequisites and, with your yes, creates a builder bot (dr eggbot suggested).
-- The builder follows [bootstrap-fleet.md](fleet/docs/bootstrap-fleet.md): private repo from this template, worktrees, per-bot git identity, rendered prompts, log and snapshot folders, then runs `selftest.sh` and `validate.sh --pre-fleet`.
+- The builder follows [bootstrap-fleet.md](fleet/docs/bootstrap-fleet.md): private repo from this kit, worktrees, per-bot git identity, rendered prompts, log and snapshot folders, then runs `selftest.sh` and `validate.sh --pre-fleet`.
 - No bot's prompt changes yet. Both still run on platform memory.
 
 **Phase 2: conversion.** One bot at a time, with your yes at each step ([convert-to-fleet-bot.md](fleet/docs/convert-to-fleet-bot.md)):
@@ -78,7 +78,7 @@ The git side of both phases is tested end to end by `fleet/scripts/selftest.sh` 
 
 ### Option B: by hand
 1. **Use this template** → create a **private** repo, clone it on the machine your bots share, set your git identity.
-2. `fleet/scripts/bootstrap.sh https://github.com/yuntaoL/bot-fleet-template.git && git push`
+2. `fleet/scripts/bootstrap.sh https://github.com/yuntaoL/bot-fleet-kit.git && git push`
 3. Set `owner_name` and add bots to `local/fleet.json`, seed `bots/<slug>/` (or `add-example.sh`), run `fleet/scripts/worktree.sh --all`.
 4. `fleet/scripts/render-prompt.sh <slug>` and put `bots/<slug>/THIN-PROMPT.md` at the top of each bot's instructions.
 5. `fleet/scripts/validate.sh` → green. Full guide: [ADOPTION.md](fleet/docs/ADOPTION.md).
@@ -104,7 +104,7 @@ The git side of both phases is tested end to end by `fleet/scripts/selftest.sh` 
 
 ## Safety
 
-- ✅ **Nothing personal in the template.** Your rules, roster and data live only in your private fleet repo.
+- ✅ **Nothing personal in the kit.** Your rules, roster and data live only in your private fleet repo.
 - ✅ **Bots can't write each other's files**: ownership is checked on every commit.
 - ✅ **Approvals are rules, not hopes**: common rules require your yes before sending, buying or changing other bots.
 - ✅ **Snapshots before every change** to a bot (`snapshot-fleet.sh`, outside git, checksummed), with a restore runbook.
@@ -115,11 +115,11 @@ The git side of both phases is tested end to end by `fleet/scripts/selftest.sh` 
 
 - **Any names.** Pick a slug and display name per bot in `local/fleet.json`; the role does the work.
 - **Your rules** go in `local/rules/` and `local/overrides.md`. They survive every upgrade.
-- **Template vs instance.** Ask "would a stranger using this template want it?" If yes, open a PR or issue on this template repo ([CONTRIBUTING](fleet/docs/CONTRIBUTING.md)). If not, it belongs in your fleet repo.
+- **Template vs instance.** Ask "would a stranger using this kit want it?" If yes, open a PR or issue on this kit repo ([CONTRIBUTING](fleet/docs/CONTRIBUTING.md)). If not, it belongs in your fleet repo.
 
 ## FAQ
 
-**Does my fleet repo have to be private?** Yes. It holds your rules and your bots' memory. Only this template is public.
+**Does my fleet repo have to be private?** Yes. It holds your rules and your bots' memory. Only this kit is public.
 
 **What if my assistant platform loses a bot?** Create a fresh bot and tell it: *"Clone <repo> and follow fleet/docs/RESTORE.md."*
 

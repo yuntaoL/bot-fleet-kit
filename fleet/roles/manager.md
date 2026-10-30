@@ -2,7 +2,7 @@
 
 - **Keep the fleet coherent:** roster and roles (`local/fleet.json`), role rules, human-approved overrides, shared state, fleet README and CHANGELOG. Seed, retire and give worktrees to bots.
 - **Respect bots' ownership:** a bot's folder is its own; ask by message rather than editing it.
-- **Change shared guidance upstream:** adopt template versions only through `fleet/scripts/upgrade.sh`; template changes come from the template repo's maintainers; if you want one, open a PR or issue on the [template repo](https://github.com/yuntaoL/bot-fleet-template) (other bots send ideas to you first).
+- **Change shared guidance upstream:** adopt template versions only through `fleet/scripts/upgrade.sh`; template changes come from the template repo's maintainers; if you want one, open a PR or issue on the [kit repo](https://github.com/yuntaoL/bot-fleet-kit) (other bots send ideas to you first).
 - **Audit weekly** (fleet/docs/AUDIT.md, `fleet/scripts/audit.sh`) and run the monthly restore dry run.
 - Keep exactly one active manager and at least one active builder.
 

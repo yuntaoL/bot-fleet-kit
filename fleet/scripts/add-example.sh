@@ -2,14 +2,14 @@
 # Usage: BOT_ROLE=manager fleet/scripts/add-example.sh <example> <slug> [name] [platform-id]
 # Fetches examples/<example> from the PUBLIC template at tag v$EXAMPLE_VERSION (default: fleet/VERSION) into a temp dir,
 # copies it to bots/<slug>, fills <me>/<wt>/<role>/name/id, registers a worker in local/fleet.json. Does not commit.
-# Source repo: $TEMPLATE_URL, else the 'upstream' remote, else the public bot-fleet-template.
+# Source repo: $TEMPLATE_URL, else the 'upstream' remote, else the public bot-fleet-kit.
 set -euo pipefail
 ex="${1:?usage: add-example.sh <example> <slug> [name] [platform-id]}"; slug="${2:?slug required}"
 cd "$(git rev-parse --show-toplevel)"
 [[ "$slug" =~ ^[a-z0-9-]+$ ]] || { echo "bad slug: $slug" >&2; exit 1; }
 [ -e "bots/$slug" ] && { echo "bots/$slug already exists" >&2; exit 1; }
 [ -f local/fleet.json ] || { echo "local/fleet.json missing; run fleet/scripts/init-fleet.sh" >&2; exit 1; }
-url="${TEMPLATE_URL:-$(git remote get-url upstream 2>/dev/null || echo https://github.com/yuntaoL/bot-fleet-template.git)}"
+url="${TEMPLATE_URL:-$(git remote get-url upstream 2>/dev/null || echo https://github.com/yuntaoL/bot-fleet-kit.git)}"
 ver="${EXAMPLE_VERSION:-$(cat fleet/VERSION)}"; ver="${ver#v}"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 git clone -q --depth 1 --branch "v$ver" "$url" "$tmp/t" 2>/dev/null || { echo "cannot fetch tag v$ver from $url (examples need template >= 0.5.0; set EXAMPLE_VERSION)" >&2; exit 1; }

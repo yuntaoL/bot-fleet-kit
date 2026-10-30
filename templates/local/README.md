@@ -1,6 +1,6 @@
 # bot-fleet
 
-Private backup of this bot fleet, created from bot-fleet-template. Layout and owners: `fleet/docs/LAYOUT.md`.
+Private backup of this bot fleet, created from bot-fleet-kit. Layout and owners: `fleet/docs/LAYOUT.md`.
 
 - Roster and roles: `local/fleet.json`
 - Rules: `fleet/rules/common.md` → `local/overrides.md` → `fleet/roles/` → `bots/<slug>/rules.md`

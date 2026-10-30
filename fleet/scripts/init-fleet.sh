@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 D=templates
 mkdir -p local/rules local/roles local/shared/state local/shared/skills bots
-grep -q '^# bot-fleet-template' README.md 2>/dev/null && cp $D/local/README.md README.md && echo "init: fleet README.md"
+grep -qE '^# bot-fleet-(kit|template)$' README.md 2>/dev/null && cp $D/local/README.md README.md && echo "init: fleet README.md"
 [ -f local/CHANGELOG.md ] || { cp $D/local/CHANGELOG.md local/CHANGELOG.md; echo "init: local/CHANGELOG.md"; }
 [ -f local/overrides.md ] || { cp $D/local/overrides.md local/overrides.md; echo "init: local/overrides.md"; }
 [ -f local/shared/state/notified.json ] || { cp $D/local/notified.json local/shared/state/notified.json; echo "init: notified.json"; }

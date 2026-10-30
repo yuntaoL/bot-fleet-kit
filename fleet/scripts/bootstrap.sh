@@ -9,9 +9,9 @@ git config branch.main.remote origin; git config --replace-all branch.main.merge
 if [ -n "${1:-}" ] && ! git remote get-url upstream >/dev/null 2>&1; then git remote add upstream "$1"; fi
 git config remote.upstream.tagOpt --no-tags 2>/dev/null || true
 python3 -c "import jsonschema" 2>/dev/null || pip install -q jsonschema 2>/dev/null || pip install -q --user --break-system-packages jsonschema 2>/dev/null || echo "bootstrap: install jsonschema for validate.sh"
-if [ "$(basename "$(git remote get-url origin 2>/dev/null)" .git)" != "bot-fleet-template" ]; then
+case "$(basename "$(git remote get-url origin 2>/dev/null)" .git)" in bot-fleet-kit|bot-fleet-template) ;; *)
   fleet/scripts/init-fleet.sh
   git add -A README.md local bots
   git diff --cached --quiet || BOT_ROLE=manager git commit -qm "manager: bootstrap fleet files"
-fi
+  ;; esac
 echo "bootstrap: done. Next: add bots to local/fleet.json, then fleet/scripts/worktree.sh --all"

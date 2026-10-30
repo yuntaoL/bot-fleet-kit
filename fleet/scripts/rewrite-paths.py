@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """0.10.0 path rewriter: old layout (template/, manager/) -> new layout (fleet/, templates/, local/).
 usage: rewrite-paths.py [--dry-run] FILE...      prints one line per changed file (and the count of rewrites).
-Only rewrites path-shaped tokens (not prose such as "the manager" or URLs like bot-fleet-template/...).
+Only rewrites path-shaped tokens (not prose such as "the manager" or URLs like bot-fleet-kit/...).
 Callers decide WHICH files: history (journals, CHANGELOGs, *.old-prompt.md) and rendered prompts are never passed in."""
 import re, sys
 B = r"(?<![\w.\-/])"   # not part of a longer path, word or URL
