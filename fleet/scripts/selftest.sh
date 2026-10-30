@@ -17,7 +17,7 @@ export GIT_CONFIG_GLOBAL="$T/gitconfig"; git config --global init.defaultBranch 
 mkdir -p "$T/tpl"; (cd "$SRC" && tar -cf - fleet templates .github README.md LICENSE $( [ -d examples ] && echo examples ) 2>/dev/null) | tar -x -C "$T/tpl"
 V="$(cat "$T/tpl/fleet/VERSION")"
 git -C "$T/tpl" init -q && git -C "$T/tpl" add -A && BOT_FLEET_UPGRADE=1 git -C "$T/tpl" commit -qm "template v$V" --no-verify && git -C "$T/tpl" tag "v$V"
-git clone -q --bare "$T/tpl" "$T/bot-fleet-template.git"
+git clone -q --bare "$T/tpl" "$T/bot-fleet-kit.git"
 # 2. "Use this template" -> private fleet repo (fresh history)
 mkdir -p "$T/seed" && git -C "$T/tpl" archive HEAD | tar -x -C "$T/seed"
 git -C "$T/seed" init -q && git -C "$T/seed" add -A && git -C "$T/seed" commit -qm "Initial commit" --no-verify
@@ -25,7 +25,7 @@ git clone -q --bare "$T/seed" "$T/my-fleet.git"
 H="$T/home"; mkdir -p "$H"; export BOT_FLEET_WORKTREES="$H/bot-fleet-worktrees"
 git clone -q "$T/my-fleet.git" "$H/bot-fleet"; cd "$H/bot-fleet"
 # ---- phase 1 (bootstrap-fleet.md) ----
-fleet/scripts/bootstrap.sh "$T/bot-fleet-template.git" >/dev/null && git push -q origin HEAD:main; ok "bootstrap.sh"
+fleet/scripts/bootstrap.sh "$T/bot-fleet-kit.git" >/dev/null && git push -q origin HEAD:main; ok "bootstrap.sh"
 python3 - <<'PY'
 import json; p="local/fleet.json"; f=json.load(open(p)); f["owner"]="alextest"; f["owner_name"]="Alex Test"
 f["bots"]=[{"slug":"atlas","name":"Atlas","id":"fake-atlas","role":"manager","status":"pre-fleet"},
@@ -46,7 +46,7 @@ for s in atlas forge; do (cd "$BOT_FLEET_WORKTREES/$s" && python3 -c "import jso
 (cd "$BOT_FLEET_WORKTREES/atlas" && git pull -q --ff-only && fleet/scripts/validate.sh --pre-fleet) || die "validate --pre-fleet"; ok "validate.sh --pre-fleet"
 # rerun is a no-op
 git pull -q --ff-only; before="$(git rev-parse HEAD)"
-fleet/scripts/bootstrap.sh "$T/bot-fleet-template.git" >/dev/null; fleet/scripts/worktree.sh --all >/dev/null
+fleet/scripts/bootstrap.sh "$T/bot-fleet-kit.git" >/dev/null; fleet/scripts/worktree.sh --all >/dev/null
 [ "$(git rev-parse HEAD)" = "$before" ] && [ -z "$(git status --porcelain)" ] || die "rerun not a no-op"; ok "phase 1 rerun is a no-op"
 # ---- phase 2 (convert-to-fleet-bot.md) ----
 reg(){ (cd "$BOT_FLEET_WORKTREES/atlas" && git pull -q --ff-only && python3 -c "import json;p='local/fleet.json';f=json.load(open(p));[b.update(status='$2') for b in f['bots'] if b['slug']=='$1'];json.dump(f,open(p,'w'),indent=2)" && fleet/scripts/sync.sh "$1 -> $2" local/ >/dev/null); }

@@ -8,7 +8,7 @@ Everything under `fleet/`, `templates/` and `.github/` is template-owned and rep
 ## Upgrading your fleet (manager, in its own worktree)
 ```
 cd ~/bot-fleet-worktrees/<manager-slug>
-git remote get-url upstream || git remote add upstream https://github.com/<owner>/bot-fleet-template.git
+git remote get-url upstream || git remote add upstream https://github.com/<owner>/bot-fleet-kit.git
 git fetch origin && git rebase origin/main
 BOT_ROLE=manager fleet/scripts/upgrade.sh <version>
 git show --stat && git push origin HEAD:main

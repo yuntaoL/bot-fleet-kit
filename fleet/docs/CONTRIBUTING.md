@@ -14,7 +14,7 @@ These apply inside a fleet (the rules above apply to this template repo). They a
 **Classify every change.**
 - **Template:** generic, useful to any fleet forked from this template, no owner data (prompt shape, common rules, scripts, OWNERS, schemas, layout, shared-skill mechanisms, audit checks).
 - **Instance:** names the owner's bots, people, rules, schedules or data; lives in `local/` or `bots/<slug>/`. Mixed changes are split.
-- Template changes: come from the template repo's maintainers (PR, VERSION and CHANGELOG bump, tag). A fleet's manager that wants one opens a PR or issue on the [template repo](https://github.com/yuntaoL/bot-fleet-template); once released, the manager adopts it via `upgrade.sh` and the builder (fleet syncer) rolls it out to every worktree.
+- Template changes: come from the template repo's maintainers (PR, VERSION and CHANGELOG bump, tag). A fleet's manager that wants one opens a PR or issue on the [kit repo](https://github.com/yuntaoL/bot-fleet-kit); once released, the manager adopts it via `upgrade.sh` and the builder (fleet syncer) rolls it out to every worktree.
 - Instance changes: the manager proposes; after owner approval the builder applies them, asking each bot to edit only files it owns. Bot profile or prompt changes always need owner approval.
 
 **Deploy safely.**

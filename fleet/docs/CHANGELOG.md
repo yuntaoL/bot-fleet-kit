@@ -1,5 +1,11 @@
 # Changelog (template)
 
+## 0.10.4 – 2026-10-30
+
+- **Renamed:** the public repo is now `yuntaoL/bot-fleet-kit` (was `bot-fleet-template`; GitHub redirects the old URL). Docs, README, LICENSE and script defaults use the new name; prose calls the whole repo the "kit". The `templates/` folder keeps its name.
+- **bootstrap.sh / init-fleet.sh:** recognise both `bot-fleet-kit` and the old `bot-fleet-template` as the kit repo itself (origin name, README heading).
+- Upgrade: from 0.10.3, point upstream at the new URL (`git remote set-url upstream https://github.com/<owner>/bot-fleet-kit.git`), then `BOT_ROLE=manager fleet/scripts/upgrade.sh 0.10.4 --dry-run`, then without `--dry-run`. No migration, no prompt change.
+
 ## 0.10.3 – 2026-10-30
 
 - **validate.sh:** a routine with `"private": true` no longer fails when its `stepsFile` is missing (private steps are git-ignored and exist only in their own bot's worktree), but its name must still match `routines/private-*.steps.md`. Warns when a `stepsFile` is not repo-relative (`bots/<slug>/routines/...`), e.g. a bare filename.
