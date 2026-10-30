@@ -1,5 +1,27 @@
 # Changelog (template)
 
+## 0.9.0 – 2026-10-29
+Role-files realign. Keeps fleets in sync with template role files so upgrades need no hand merges.
+- **Role defaults:** bare `docs/...` paths fixed to `template/docs/...` (AUDIT, RESTORE, install-manager, bootstrap-fleet, convert-to-fleet-bot); roles are read from the fleet root. The manager's boundaries placeholder becomes a generic reach bullet plus a pointer to `manager/local/roles/manager.md`.
+- **Common rules:** new rule 14 "Journal every run" (one place for all roles); rule 4 read order adds `manager/local/roles/<role>.md` and limits `manager/local/` to top-level files.
+- **Thin prompt:** `THIN-PROMPT.tmpl` step 2 reads `manager/local/*.md` (top-level only), then `manager/roles/{{ROLE}}.md`, then `manager/local/roles/{{ROLE}}.md` if it exists. Already rendered prompts keep working; re-render to pick up the new read order.
+- **upgrade.sh:** role files equal to the current or target default are copied automatically; an edited one stops the upgrade with a diff before anything changes (`BOT_FLEET_KEEP_ROLES=1` keeps it and continues).
+- **validate.sh:** WARN `role drift` when `manager/roles/<role>.md` differs from the template default (FAIL under `BOT_FLEET_STRICT_ROLES=1`).
+- **selftest.sh:** fails on bare `docs/` paths in role defaults; negative check for role drift.
+- **CONTRIBUTING.md:** "Role files are template-owned copies". Log scripts stay instance; fleets name theirs in `manager/local/`.
+- No migration. Upgrade: move local role edits to `manager/local/roles/<role>.md` and reset `manager/roles/` first (or `BOT_FLEET_KEEP_ROLES=1`), then `BOT_ROLE=manager template/scripts/upgrade.sh 0.9.0`; optionally re-render prompts.
+
+## 0.8.0 – 2026-10-29
+Bootstrap release. Additive: no files removed or renamed; existing fleets keep working without changes (new checks warn, never fail, unless opted in).
+- **Two-phase bootstrap (bot-driven setup):** `template/docs/install-manager.md` (Part A phase 1 pre-fleet: names, prerequisites, create the builder with the owner's yes, delegate, exit check; Part B phase 2: manager converts itself, then supervises the builder), `template/docs/bootstrap-fleet.md` (builder environment setup; rerunnable repair guide), `template/docs/convert-to-fleet-bot.md` (snapshot → `converting` → copy memory → git-first prompt with fallback → N=5 verified runs → contract; named rollback holder). `ADOPTION.md` points to the bot-driven path; the manual path is unchanged.
+- **Thin prompt template:** `template/defaults/THIN-PROMPT.tmpl` with `{{BOT_NAME}}`, `{{OWNER_NAME}}`, `{{SLUG}}`, `{{ROLE}}`, `{{WORKTREE}}`; `template/scripts/render-prompt.sh <slug>` writes `bots/<slug>/THIN-PROMPT.md` (instance) and refuses empty `owner_name` or leftover placeholders. The old `defaults/bot/instructions.md` prompt still works.
+- **Schemas:** `fleet.json` gains optional `owner_name` and bot statuses `pre-fleet`, `converting`; `state.json` gains optional `bootstrap {phase, step, status, snapshot, rollbackHolder, verifiedRuns, updated}`. `init-fleet.sh` writes `"owner_name": ""` in new fleets only.
+- **validate.sh:** `--pre-fleet` mode (one manager + a builder listed, every worktree present with `fleet.bot` = slug). Default mode adds: FAIL on duplicate slugs or a `bots/*/THIN-PROMPT.md` with `{{...}}`; WARN when there is no active manager or no active builder (`BOT_FLEET_STRICT_ROLES=1` makes it FAIL; planned default later), on worktree identity mismatch, and while bots are `pre-fleet`/`converting`.
+- **Self-test:** `template/scripts/selftest.sh` runs both bootstrap phases end to end in throwaway repos (fake owner and bots, rerun no-op, forced rollback, negative checks); CI runs it.
+- **Role defaults:** one bootstrap line added to `defaults/roles/manager.md` and `builder.md` (upgrade.sh lists them as differing; merge by hand). `AGENT_GUIDE.md` "Adding a bot" gains the render step.
+- **README:** rewritten (why it exists, quick start by chat or by hand, built vs proposed).
+- No migration. Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.8.0`; then optionally set `owner_name` and render prompts.
+
 ## 0.7.0 – 2026-10-29
 Additive release: new files and warn-only checks; nothing removed or renamed; no behavior change for existing bots.
 - **Fleet changes:** `CONTRIBUTING.md` gains "Fleet changes: classify first, then deploy safely" (Template vs Instance; expand-then-contract; prompt support before content moves; canary; snapshot before every change; one step at a time; additive template releases). Default skill `template/defaults/fleet/skills/fleet-change/SKILL.md`.

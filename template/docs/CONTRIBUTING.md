@@ -5,7 +5,7 @@
 1. Anything under `template/` or `.github/` changes only in this template repo, via PR.
 2. Each change bumps `template/VERSION`, adds a `template/docs/CHANGELOG.md` entry (with migration notes), and is tagged `vX.Y.Z`.
 3. User-data changes need an idempotent `template/migrations/X.Y.Z.sh`.
-4. Fleets receive changes only via `template/scripts/upgrade.sh X.Y.Z`. Local customization goes in `manager/` (roles, overrides, local rules).
+4. Fleets receive changes only via `template/scripts/upgrade.sh X.Y.Z`. Local customization goes in `manager/` (overrides, local rules); see "Role files" below.
 5. Adoption friction → issue or PR here, not a local patch.
 
 ## Fleet changes: classify first, then deploy safely (added 0.7.0)
@@ -24,3 +24,9 @@ These apply inside a fleet (the rules above apply to this template repo). They a
 - Canary on a low-impact worker; the manager and builder migrate last and act as each other's rollback operator.
 - Snapshot each bot (profile, prompt, routines, memory) outside git before every change (`template/scripts/snapshot-fleet.sh`); keep a restore runbook (`template/docs/RESTORE-BOT.md`).
 - One bot, one step at a time. Template releases are additive only.
+
+## Role files are template-owned copies (added 0.9.0)
+- `manager/roles/<role>.md` are exact copies of `template/defaults/roles/<role>.md`. Never edit them in a fleet: `upgrade.sh` replaces unedited copies automatically and stops with a diff when one was edited; `validate.sh` warns on drift (`BOT_FLEET_STRICT_ROLES=1` fails).
+- Fleet-specific role additions go in `manager/local/roles/<role>.md` (optional; read right after the role file). Fleet-wide local rules stay in top-level `manager/local/*.md`; human-approved deviations from common rules stay in `manager/overrides.md`.
+- A role addition that would help any fleet is a template change: propose it here instead.
+- Fleet-specific tooling (for example a journal/log script and where detailed logs live) stays instance: name it in `manager/local/*.md` so common rule 14 can point to it.

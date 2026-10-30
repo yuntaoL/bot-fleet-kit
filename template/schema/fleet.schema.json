@@ -1,7 +1,1 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"fleet.json","type":"object","required":["schemaVersion","bots"],
-"properties":{"schemaVersion":{"type":"integer","const":2},"owner":{"type":"string"},"templateVersion":{"type":"string"},
-"bots":{"type":"array","items":{"type":"object","required":["slug","name","id","role","status"],"additionalProperties":false,
-"properties":{"slug":{"type":"string","pattern":"^[a-z0-9-]+$"},"name":{"type":"string"},"id":{"type":"string"},
-"previousIds":{"type":"array","items":{"type":"string"}},
-"role":{"enum":["manager","builder","worker","retired"]},
-"status":{"enum":["active","paused","retired"]},"summary":{"type":"string"}}}}}}
+{"$schema": "https://json-schema.org/draft/2020-12/schema", "title": "fleet.json", "type": "object", "required": ["schemaVersion", "bots"], "properties": {"schemaVersion": {"type": "integer", "const": 2}, "owner": {"type": "string"}, "templateVersion": {"type": "string"}, "bots": {"type": "array", "items": {"type": "object", "required": ["slug", "name", "id", "role", "status"], "additionalProperties": false, "properties": {"slug": {"type": "string", "pattern": "^[a-z0-9-]+$"}, "name": {"type": "string"}, "id": {"type": "string"}, "previousIds": {"type": "array", "items": {"type": "string"}}, "role": {"enum": ["manager", "builder", "worker", "retired"]}, "status": {"enum": ["active", "paused", "retired", "pre-fleet", "converting"], "description": "pre-fleet = listed during bootstrap phase 1 (platform prompt only); converting = phase-2 conversion in progress (0.8.0+)"}, "summary": {"type": "string"}}}}, "owner_name": {"type": "string", "description": "Owner's display name; fills {{OWNER_NAME}} in THIN-PROMPT.tmpl (0.8.0+). Optional."}}}
