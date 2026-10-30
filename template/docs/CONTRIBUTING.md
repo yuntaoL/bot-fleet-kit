@@ -30,3 +30,7 @@ These apply inside a fleet (the rules above apply to this template repo). They a
 - Fleet-specific role additions go in `manager/local/roles/<role>.md` (optional; read right after the role file). Fleet-wide local rules stay in top-level `manager/local/*.md`; human-approved deviations from common rules stay in `manager/overrides.md`.
 - A role addition that would help any fleet is a template change: open a PR or issue on this template repo instead.
 - Fleet-specific tooling (for example a journal/log script and where detailed logs live) stays instance: name it in `manager/local/*.md` so common rule 14 can point to it.
+
+## Template branches start from current main (added 0.9.0)
+- Cut every template change branch from a fresh clone of the template repo at current `origin/main` (`git clone ... && git checkout -b <branch> origin/main`), never from an older local checkout or a previous release branch. A stale base makes the PR conflict with releases merged since.
+- Before opening or updating the PR, `git fetch` and confirm `git merge-base --is-ancestor origin/main HEAD`; if not, merge `origin/main` (no force-push) and rerun `selftest.sh`.
