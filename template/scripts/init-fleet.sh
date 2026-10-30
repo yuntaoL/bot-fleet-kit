@@ -9,7 +9,7 @@ grep -q '^# bot-fleet-template' README.md 2>/dev/null && cp $D/fleet/README.md R
 for f in $D/roles/*.md; do [ -f "manager/roles/$(basename "$f")" ] || { cp "$f" manager/roles/; echo "init: manager/roles/$(basename "$f")"; }; done
 [ -f manager/overrides.md ] || { cp $D/fleet/overrides.md manager/overrides.md; echo "init: manager/overrides.md"; }
 [ -f manager/shared/state/notified.json ] || { cp $D/fleet/notified.json manager/shared/state/notified.json; echo "init: notified.json"; }
-[ -f manager/fleet.json ] || { printf '{\n  "schemaVersion": 2,\n  "owner": "",\n  "templateVersion": "%s",\n  "bots": []\n}\n' "$(cat template/VERSION)" > manager/fleet.json; echo "init: manager/fleet.json"; }
+[ -f manager/fleet.json ] || { printf '{\n  "schemaVersion": 2,\n  "owner": "",\n  "owner_name": "",\n  "templateVersion": "%s",\n  "bots": []\n}\n' "$(cat template/VERSION)" > manager/fleet.json; echo "init: manager/fleet.json"; }
 mkdir -p manager/registry
 [ -f manager/registry/INDEX.md ] || { cp $D/fleet/registry/INDEX.md manager/registry/INDEX.md; echo "init: manager/registry/INDEX.md"; }
 [ -f manager/shared/INDEX.md ] || { cp $D/fleet/shared-INDEX.md manager/shared/INDEX.md; echo "init: manager/shared/INDEX.md"; }
