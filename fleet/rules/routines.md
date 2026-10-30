@@ -1,5 +1,7 @@
 # Routine runs (fleet-owned)
 
+`<slug>`, `<role>` and `<routine>` are your own values, taken from your prompt and `local/fleet.json` and filled in by you at run time. They are not fill-ins; only `templates/` uses `{{...}}` fill-ins.
+
 Every scheduled routine run follows this file. The live routine prompt only names the bot, its worktree and the routine; everything a run does is here and in the routine's own file in git.
 
 1. **Worktree.** Work only in your own worktree. Run `git pull --ff-only` there first. Your role is your entry in `local/fleet.json`.

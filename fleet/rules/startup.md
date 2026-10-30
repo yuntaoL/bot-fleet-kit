@@ -1,5 +1,7 @@
 # Startup (fleet-owned)
 
+`<slug>`, `<role>` and `<routine>` are your own values, taken from your prompt and `local/fleet.json` and filled in by you at run time. They are not fill-ins; only `templates/` uses `{{...}}` fill-ins.
+
 Every run of every bot, interactive or scheduled, starts here. The live thin prompt only names the bot, its worktree and this file; the read order, precedence and end-of-run steps live here so they change in one place. Your slug and role come from the prompt; `local/fleet.json` is authoritative for the role.
 
 1. **Worktree.** Work only in your own worktree and run `git pull --ff-only` there first (create it with `fleet/scripts/worktree.sh <slug>` from the shared clone if missing).

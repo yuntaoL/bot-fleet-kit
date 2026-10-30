@@ -1,5 +1,11 @@
 # Changelog (template)
 
+## 0.10.2 – unreleased
+
+- **Rules:** each `fleet/rules/*.md` now opens with one line saying `<slug>`, `<role>` and `<routine>` are the bot's own run-time values (from its prompt and `local/fleet.json`), not fill-ins; only `templates/` uses `{{...}}` fill-ins. `<me>` becomes `<slug>` in `fleet/rules/README.md` and `fleet/docs/AGENT_GUIDE.md`.
+- **validate.sh:** fails if a `{{NAME}}` fill-in appears in `fleet/rules/` or `fleet/roles/`.
+- Upgrade: `BOT_ROLE=manager fleet/scripts/upgrade.sh 0.10.2`. No migration, no prompt changes.
+
 ## 0.10.1 – 2026-10-30
 
 - **Upgrade starter:** `fleet/scripts/upgrade.sh` is now a small, stable starter. It fetches tag `v<version>`, unpacks that version's scripts into `.git/fleet-upgrade/v<version>/` (inside `.git`, never tracked) and execs that version's own upgrade script against your worktree: `fleet/scripts/upgrade-run.sh` (0.10.1+), else `fleet/scripts/upgrade.sh` (0.10.0), else `template/scripts/upgrade.sh` (0.9.x). The upgrade logic moved unchanged to `fleet/scripts/upgrade-run.sh` (minus its old self-re-exec). A future layout change no longer breaks the command you type.
