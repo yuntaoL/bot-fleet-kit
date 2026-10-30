@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Usage: fleet/scripts/render-prompt.sh <slug> [--stdout] [--worktree-base DIR]
-# Renders templates/THIN-PROMPT.tmpl for one bot (0.10.5+: worktree + slug only; identity is read from bots/<slug>/bot.json at run time)
+# Renders templates/THIN-PROMPT.tmpl for one bot (0.10.5+: worktree path only; at run time the bot reads <worktree>/.bot -> bots/<slug>/bot.json)
 # into bots/<slug>/THIN-PROMPT.md (instance file). Fails if owner_name is empty or any {{...}} is left unfilled.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"

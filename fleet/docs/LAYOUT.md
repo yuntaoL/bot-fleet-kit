@@ -16,6 +16,7 @@ bot-fleet/
 │   ├── docs/  schema/            documentation; JSON Schemas
 │   ├── scripts/                  bootstrap, worktree, sync, upgrade, validate, audit, compat, owners.py, …
 │   └── migrations/               <version>.sh, idempotent
+├── .bot                          untracked, per worktree (0.10.5+): one line bots/<slug>/bot.json; how a bot finds itself
 ├── templates/                    template  placeholder/starter files only
 │   ├── THIN-PROMPT.tmpl  ROUTINE-PROMPT.tmpl  bot.json.tmpl
 │   ├── bot/                      new-bot skeleton

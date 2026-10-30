@@ -39,8 +39,8 @@ fleet/scripts/worktree.sh --all >/dev/null; mkdir -p "$H/bot-logs" "$H/fleet-sna
 for s in atlas forge; do [ "$(git -C "$BOT_FLEET_WORKTREES/$s" config fleet.bot)" = $s ] || die "identity $s"; done; ok "worktrees + identity"
 for s in atlas forge; do (cd "$BOT_FLEET_WORKTREES/$s" && ! fleet/scripts/render-prompt.sh $s >/dev/null 2>&1 && fleet/scripts/bot-json.sh $s >/dev/null && fleet/scripts/render-prompt.sh $s >/dev/null) || die "render needs bot.json ($s)"; done
 P="$BOT_FLEET_WORKTREES/atlas/bots/atlas/THIN-PROMPT.md"
-grep -q "Your worktree is $BOT_FLEET_WORKTREES/atlas\." "$P" && grep -q "read bots/atlas/bot.json and fleet/rules/startup.md" "$P" && ! grep -q "Atlas\|Alex Test" "$P" || die "rendered prompt (atlas): worktree + bot.json only"
-grep -q "read bots/forge/bot.json" "$BOT_FLEET_WORKTREES/forge/bots/forge/THIN-PROMPT.md" || die "rendered prompt (forge)"
+grep -q "Your worktree is $BOT_FLEET_WORKTREES/atlas\." "$P" && grep -q 'read `.bot`, open the bot.json it points to' "$P" && ! grep -q "bots/\|Atlas\|Alex Test" "$P" || die "rendered prompt (atlas): worktree + bot.json only"
+! grep -q "bots/forge" "$BOT_FLEET_WORKTREES/forge/bots/forge/THIN-PROMPT.md" || die "rendered prompt (forge)"
 B="$BOT_FLEET_WORKTREES/atlas/bots/atlas/bot.json"; python3 -c "import json,sys;j=json.load(open('$B'));sys.exit(0 if (j['display_name'],j['slug'],j['role'],j['owner_name'],j['worktree'],j['kit_version'])==('Atlas','atlas','manager','Alex Test','$BOT_FLEET_WORKTREES/atlas','$V') and j['timezone'] else 1)" || die "bot.json values (atlas)"; ok "bot-json.sh (identity from registry) + render needs bot.json"
 ! grep -q '{{' "$BOT_FLEET_WORKTREES"/*/bots/*/THIN-PROMPT.md || die "unfilled placeholder"; ok "render-prompt (Alex Test, no {{...}})"
 for s in atlas forge; do (cd "$BOT_FLEET_WORKTREES/$s" && python3 -c "import json,datetime;p='bots/$s/state.json';d=json.load(open(p));d['bootstrap']={'phase':1,'step':'done','status':'done','updated':datetime.datetime.now(datetime.timezone.utc).isoformat()};json.dump(d,open(p,'w'),indent=2)" && fleet/scripts/sync.sh "phase 1 done" "bots/$s/" >/dev/null); done; ok "sync.sh as each bot"
@@ -61,7 +61,7 @@ reg forge pre-fleet; [ ! -f "$BOT_FLEET_WORKTREES/forge/bots/forge/kb/memory.md"
 conv forge atlas; reg forge active; ok "builder converted after rollback (rollback holder: manager)"
 # a builder-created worker
 (cd "$BOT_FLEET_WORKTREES/atlas" && git pull -q --ff-only && python3 -c "import json;p='local/fleet.json';f=json.load(open(p));f['bots'].append({'slug':'pip','name':'Pip','id':'fake-pip','role':'worker','status':'active'});json.dump(f,open(p,'w'),indent=2)" \
-  && fleet/scripts/sync.sh "registry: pip" local/ >/dev/null && ! fleet/scripts/create-bot.sh nobody >/dev/null 2>&1 && fleet/scripts/create-bot.sh pip >/dev/null && [ -f bots/pip/bot.json ] && [ ! -e bots/pip/routines/example.json ] && grep -q "bots/pip/bot.json" bots/pip/THIN-PROMPT.md && ! fleet/scripts/create-bot.sh pip >/dev/null 2>&1 && fleet/scripts/sync.sh "add pip" bots/pip/ >/dev/null) || die "create-bot"; ok "create-bot.sh: copies starter, generates bot.json, renders prompt; refuses unknown/existing slug"
+  && fleet/scripts/sync.sh "registry: pip" local/ >/dev/null && ! fleet/scripts/create-bot.sh nobody >/dev/null 2>&1 && fleet/scripts/create-bot.sh pip >/dev/null && [ -f bots/pip/bot.json ] && [ ! -e bots/pip/routines/example.json ] && grep -q 'read `.bot`' bots/pip/THIN-PROMPT.md && ! fleet/scripts/create-bot.sh pip >/dev/null 2>&1 && fleet/scripts/sync.sh "add pip" bots/pip/ >/dev/null) || die "create-bot"; ok "create-bot.sh: copies starter, generates bot.json, renders prompt; refuses unknown/existing slug"
 (cd "$BOT_FLEET_WORKTREES/atlas" && git pull -q --ff-only && BOT_FLEET_STRICT_ROLES=1 fleet/scripts/validate.sh >/dev/null) || die "strict validate after phase 2"; ok "validate.sh strict roles after phase 2"
 # negative checks
 (cd "$BOT_FLEET_WORKTREES/atlas" && python3 -c "import json;p='local/fleet.json';f=json.load(open(p));[b.update(status='paused') for b in f['bots'] if b['role']=='builder'];json.dump(f,open(p,'w'),indent=2)" \
@@ -77,10 +77,10 @@ A="$BOT_FLEET_WORKTREES/atlas"; R=fleet/scripts/rename-bot.sh
   && fleet/scripts/sync.sh "rename pip -> wren (registry)" local/ >/dev/null) || die "rename registry"
 (cd "$BOT_FLEET_WORKTREES/forge" && git pull -q --ff-only && BOT_RESTORE=1 $R pip wren expand >/dev/null && git push -q origin HEAD:main) || die "rename expand"
 (cd "$A" && git pull -q --ff-only && $R pip wren worktree >/dev/null) || die "rename worktree"
-W="$BOT_FLEET_WORKTREES/wren"; [ -d "$W" ] && [ ! -e "$BOT_FLEET_WORKTREES/pip" ] && [ "$(git -C "$W" config fleet.bot)" = wren ] && [ "$(git -C "$W" branch --show-current)" = wt/wren ] || die "rename worktree result"
+W="$BOT_FLEET_WORKTREES/wren"; [ -d "$W" ] && [ ! -e "$BOT_FLEET_WORKTREES/pip" ] && [ "$(git -C "$W" config fleet.bot)" = wren ] && [ "$(git -C "$W" branch --show-current)" = wt/wren ] && [ "$(cat "$W/.bot")" = bots/wren/bot.json ] || die "rename worktree result (incl. .bot)"
 (cd "$W" && git pull -q --ff-only && python3 -c "import json,sys;j=json.load(open('bots/wren/bot.json'));sys.exit(0 if j['slug']=='wren' and j['worktree'].endswith('/wren') and j['display_name']=='Pip' else 1)" \
   && python3 -c "import json;p='bots/wren/bot.json';j=json.load(open(p));j['display_name']='Wren';json.dump(j,open(p,'w'),indent=2)" \
-  && fleet/scripts/render-prompt.sh wren >/dev/null && grep -q "bots/wren/bot.json" bots/wren/THIN-PROMPT.md && fleet/scripts/sync.sh "re-render" bots/wren/ >/dev/null \
+  && fleet/scripts/render-prompt.sh wren >/dev/null && grep -q 'read `.bot`' bots/wren/THIN-PROMPT.md && fleet/scripts/sync.sh "re-render" bots/wren/ >/dev/null \
   && BOT_NAME=pip $R pip wren contract >/dev/null && git push -q origin HEAD:main && [ ! -e bots/pip ]) || die "rename contract"
 (cd "$A" && git pull -q --ff-only && out="$(BOT_FLEET_STRICT_ROLES=1 fleet/scripts/validate.sh 2>&1)" && ! grep -q "WARN worktree" <<<"$out" \
   && [ "$($R pip wren refs)" = "rename-bot: no references" ]) || die "validate/refs after rename"
@@ -99,7 +99,7 @@ ok "rename drift: check-names clean, then DRIFT (exit 3) with old+new names, rep
 (cd "$A" && git pull -q --ff-only && mkdir -p bots/atlas/routines && printf '{"name":"daily-check","schedule":"0 9 * * *","steps":["Check the inbox.","Journal the result."]}\n' > bots/atlas/routines/daily-check.json \
   && printf '{"name":"old-one","schedule":"0 8 * * *","prompt":"do everything"}\n' > bots/atlas/routines/old-one.json \
   && fleet/scripts/render-routine-prompt.sh atlas >/dev/null && P2=bots/atlas/routines/daily-check.prompt.md \
-  && grep -q "read bots/atlas/bot.json (your identity) and fleet/rules/startup.md" $P2 && grep -q "fleet/rules/routines.md" $P2 && grep -q "routine \`daily-check\`" $P2 && ! grep -q "Atlas\|Alex Test" $P2 && ! grep -q '{{' $P2 \
+  && grep -q 'read `.bot` and the bot.json it points to (your identity' $P2 && ! grep -q "bots/" $P2 && grep -q "fleet/rules/routines.md" $P2 && grep -q "routine \`daily-check\`" $P2 && ! grep -q "Atlas\|Alex Test" $P2 && ! grep -q '{{' $P2 \
   && fleet/scripts/validate.sh >/dev/null) || die "render-routine-prompt / schema"
 (cd "$A" && out="$(fleet/scripts/check-routines.sh "$T/none")" && grep -q "WARN bots/atlas/routines/old-one.json: legacy fat prompt" <<<"$out") || die "check-routines legacy"
 LA="$T/ag/fake-atlas/automations"; mkdir -p "$LA"
@@ -162,4 +162,21 @@ ok "0.10.5 check-journal flags unjournaled activity, clears after a journal line
   && rm bots/forge/bot.json && bash fleet/migrations/0.10.5.sh --dry-run | grep -q "would: write bots/forge/bot.json" && [ ! -f bots/forge/bot.json ] && bash fleet/migrations/0.10.5.sh >/dev/null && [ -f bots/forge/bot.json ] && git diff --quiet -- bots/forge && bash fleet/migrations/0.10.5.sh >/dev/null && [ -z "$(git status --porcelain)" ] \
   && python3 -c "import json;p='bots/atlas/bot.json';j=json.load(open(p));j['kit_version']='0.0.1';json.dump(j,open(p,'w'))" && fleet/scripts/bot-json.sh --all --refresh >/dev/null && grep -q "\"kit_version\": \"$V\"" bots/atlas/bot.json && grep -q '"display_name": "Atlas"' bots/atlas/bot.json && git checkout -q -- bots/atlas) || die "bot.json checks"
 ok "0.10.5 bot.json: missing/schema/slug fail; hard-coded name+role warn; registry drift warns, --mirror clears; prompt has no name; migration dry-run, writes missing, idempotent; --refresh updates kit_version only"
+# 0.10.5: bootstrap from the worktree path only (.bot pointer), missing .bot fails safe, disagreement warns
+A2="$BOT_FLEET_WORKTREES/atlas"
+WT="$(sed -n 's/.*Your worktree is \([^ ]*\)\. .*/\1/p' "$A2/bots/atlas/THIN-PROMPT.md" | head -1)"
+[ "$WT" = "$A2" ] && [ "$(cat "$WT/.bot")" = "bots/atlas/bot.json" ] && [ -z "$(git -C "$WT" status --porcelain -- .bot)" ] \
+  && python3 -c "import json,sys;w='$WT';p=open(w+'/.bot').read().strip();j=json.load(open(w+'/'+p));sys.exit(0 if (j['slug'],j['role'],j['display_name'])==('atlas','manager','Atlas') else 1)" \
+  && [ "$(cd "$WT" && fleet/scripts/bot-pointer.sh --read)" = atlas ] && [ "$(cat "$BOT_FLEET_WORKTREES/forge/.bot")" = "bots/forge/bot.json" ] \
+  && grep -q "never guess your slug" "$WT/fleet/rules/startup.md" \
+  && rm "$BOT_FLEET_WORKTREES/forge/.bot" && (cd "$A2" && bash fleet/migrations/0.10.5.sh --dry-run | grep -q "would: write $BOT_FLEET_WORKTREES/forge/.bot" && bash fleet/migrations/0.10.5.sh >/dev/null) \
+  && [ "$(cat "$BOT_FLEET_WORKTREES/forge/.bot")" = "bots/forge/bot.json" ] || die "bootstrap from worktree path only"
+ok "0.10.5 bootstrap: prompt worktree path -> .bot (untracked) -> bot.json gives slug, role, name; no prior knowledge; migration restores a missing .bot"
+(cd "$A2" && mv .bot "$T/dotbot" && out="$(fleet/scripts/bot-pointer.sh --read 2>&1)"; r=$?; [ $r = 1 ] && grep -q "no $A2/.bot" <<<"$out" \
+  && v="$(fleet/scripts/validate.sh 2>&1)" && grep -q "WARN $A2: no .bot" <<<"$v" \
+  && echo "bots/ghost/bot.json" > .bot && ! fleet/scripts/bot-pointer.sh --read >/dev/null 2>&1 \
+  && echo "bots/forge/bot.json" > .bot && v="$(fleet/scripts/validate.sh 2>&1)" && grep -q "names 'forge' but this worktree's fleet.bot is 'atlas'" <<<"$v" && grep -q "rendered prompt bots/forge/THIN-PROMPT.md names worktree" <<<"$v" \
+  && mv "$T/dotbot" .bot && v="$(fleet/scripts/validate.sh 2>&1)" && ! grep -q "WARN.*\.bot" <<<"$v" \
+  && grep -q "go to step 7" fleet/rules/startup.md && grep -q "If the worktree, \`.bot\`" templates/THIN-PROMPT.tmpl) || die ".bot fail-safe / agreement"
+ok "0.10.5 .bot: missing or dangling pointer fails (--read exit 1, validate warns, rules say fail safe); pointer/fleet.bot/prompt disagreement warns"
 echo "selftest: ALL PASS ($T)"

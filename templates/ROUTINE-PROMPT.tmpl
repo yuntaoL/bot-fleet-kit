@@ -1,2 +1,2 @@
-In your worktree {{WORKTREE}}, run `fleet/scripts/pull.sh`, read bots/{{SLUG}}/bot.json (your identity) and fleet/rules/startup.md, then read fleet/rules/routines.md and follow it to run routine `{{ROUTINE}}`.
-If the worktree or those files can't be read, fail safe: do nothing irreversible, never send, buy or delete, and message the manager; only if you are the manager or it cannot be reached, tell the owner.
+In your worktree {{WORKTREE}}, run `fleet/scripts/pull.sh`, read `.bot` and the bot.json it points to (your identity: slug, role and the rest), then fleet/rules/startup.md, then read fleet/rules/routines.md and follow it to run routine `{{ROUTINE}}`.
+If the worktree, `.bot`, the bot.json it names or those files can't be read, fail safe: do nothing irreversible, never send, buy or delete, and message the manager; only if you are the manager or it cannot be reached, tell the owner.

@@ -2,7 +2,7 @@
 # Usage: fleet/scripts/render-routine-prompt.sh <slug> [<routine>|--all] [--stdout] [--worktree-base DIR]
 # Renders templates/ROUTINE-PROMPT.tmpl (0.9.2+; 0.9.4+ a minimal prompt that defers to fleet/rules/routines.md) for one routine (default --all: every bots/<slug>/routines/*.json)
 # into bots/<slug>/routines/<routine>.prompt.md (instance file; paste it as the live routine prompt).
-# 0.10.5+: values come from bots/<slug>/bot.json (bot-json.sh); the prompt keeps only the worktree path and slug.
+# 0.10.5+: values come from bots/<slug>/bot.json (bot-json.sh); the prompt keeps only the worktree path and routine name; the bot finds its slug via <worktree>/.bot.
 # Fails if bot.json is missing, the routine file is missing, or any {{...}} is left unfilled.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"

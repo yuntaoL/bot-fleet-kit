@@ -3,7 +3,7 @@
 # Git parts of the rename-bot skill (fleet/skills/rename-bot/SKILL.md).
 #   refs      grep the repo for bots/<old>, the old worktree dir and wt/<old> (fleet/, templates/, journals, CHANGELOGs excluded)
 #   expand    copy bots/<old>/ -> bots/<new>/ and commit (builder: BOT_RESTORE=1 BOT_ROLE=builder)
-#   worktree  move <base>/<old> -> <base>/<new>, rename branch wt/<old> -> wt/<new>, set fleet.bot, prune (run from any checkout)
+#   worktree  move <base>/<old> -> <base>/<new>, rename branch wt/<old> -> wt/<new>, set fleet.bot and .bot, prune (run from any checkout)
 #   contract  git rm bots/<old>/ and commit (run as the old identity: BOT_NAME=<old>)
 # Worktree base: BOT_FLEET_WORKTREES or <parent of shared clone>/bot-fleet-worktrees. --dry-run prints, changes nothing.
 set -euo pipefail
@@ -43,6 +43,7 @@ PYJ
     if git show-ref -q --verify "refs/heads/wt/$old"; then run git branch -m "wt/$old" "wt/$new"; fi
     run git -C "$n" branch -q --set-upstream-to=origin/main "wt/$new"
     run git -C "$n" config --worktree fleet.bot "$new"
+    run "$(git rev-parse --show-toplevel)/fleet/scripts/bot-pointer.sh" "$new" "$n"   # 0.10.5+: .bot -> bots/<new>/bot.json
     run git worktree prune
     ;;
   contract)

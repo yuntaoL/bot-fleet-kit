@@ -177,6 +177,36 @@ if os.path.exists(F):
             if rx_role and f.startswith(("templates/",f"bots/{s}/THIN-PROMPT",f"bots/{s}/routines/")) and rx_role.search(t): w+=1; print(f"WARN {f}: hard-codes role '{role}' (from bots/{s}/bot.json); reference bot.json instead")
 if w: print(f"validate: {w} bot.json warning(s) (not failures)")
 PY2
+# 0.10.5 .bot pointer (warn only): each bot worktree's untracked .bot names bots/<slug>/bot.json and agrees with
+# that bot.json, the worktree's fleet.bot config and the rendered prompt's worktree path
+python3 - <<'PY3' || true
+import json, os, re, subprocess
+def g(*a, cwd=None):
+    r=subprocess.run(["git",*a],cwd=cwd,capture_output=True,text=True); return r.stdout.strip() if r.returncode==0 else ""
+w=0
+def warn(m):
+    global w; w+=1; print(f"WARN {m}")
+if g("ls-files","--",".bot"): warn(".bot is tracked; it must stay untracked (git rm --cached .bot)")
+for wt in [l[9:] for l in g("worktree","list","--porcelain").splitlines() if l.startswith("worktree ")]:
+    cfg=g("config","--worktree","--get","fleet.bot",cwd=wt); bp=os.path.join(wt,".bot")
+    if not os.path.exists(bp):
+        if cfg: warn(f"{wt}: no .bot (fleet/scripts/bot-pointer.sh {cfg} {wt}, or worktree.sh {cfg})")
+        continue
+    line=open(bp).read().strip(); m=re.fullmatch(r"bots/([a-z0-9-]+)/bot\.json",line)
+    if not m: warn(f"{bp}: '{line}' is not bots/<slug>/bot.json"); continue
+    s=m.group(1); bj=os.path.join(wt,line)
+    if not os.path.exists(bj): warn(f"{bp}: points to missing {line}"); continue
+    try: j=json.load(open(bj))
+    except Exception: warn(f"{bp}: {line} is not valid JSON"); continue
+    if j.get("slug")!=s: warn(f"{bp}: names '{s}' but {line} has slug '{j.get('slug')}'")
+    if cfg and cfg!=s: warn(f"{bp}: names '{s}' but this worktree's fleet.bot is '{cfg}'")
+    if j.get("worktree") and os.path.realpath(j["worktree"])!=os.path.realpath(wt): warn(f"{bp}: {line} worktree '{j['worktree']}' != this worktree '{wt}'")
+    tp=os.path.join(wt,f"bots/{s}/THIN-PROMPT.md")
+    if os.path.exists(tp):
+        pm=re.search(r"Your worktree is (\S+?)\.(\s|$)",open(tp).read())
+        if pm and os.path.realpath(pm.group(1))!=os.path.realpath(wt): warn(f"{bp}: rendered prompt bots/{s}/THIN-PROMPT.md names worktree '{pm.group(1)}', not '{wt}' (re-render, or fix .bot)")
+if w: print(f"validate: {w} .bot warning(s) (not failures)")
+PY3
 # 0.10.5 journal gaps (warn only): activity today with no journal line after it
 bash fleet/scripts/check-journal.sh 2>/dev/null | grep "^WARN" || true
 [ $err = 0 ] && echo "validate: OK ($MODE)" || { echo "validate: FAILED"; exit 1; }
