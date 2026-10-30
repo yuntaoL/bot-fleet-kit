@@ -1,6 +1,6 @@
 # Changelog (template)
 
-## 0.10.1 – unreleased
+## 0.10.1 – 2026-10-30
 
 - **Upgrade starter:** `fleet/scripts/upgrade.sh` is now a small, stable starter. It fetches tag `v<version>`, unpacks that version's scripts into `.git/fleet-upgrade/v<version>/` (inside `.git`, never tracked) and execs that version's own upgrade script against your worktree: `fleet/scripts/upgrade-run.sh` (0.10.1+), else `fleet/scripts/upgrade.sh` (0.10.0), else `template/scripts/upgrade.sh` (0.9.x). The upgrade logic moved unchanged to `fleet/scripts/upgrade-run.sh` (minus its old self-re-exec). A future layout change no longer breaks the command you type.
 - Upgrade: from 0.10.0, `BOT_ROLE=manager fleet/scripts/upgrade.sh 0.10.1 --dry-run`, then without `--dry-run`. No migration, no prompt changes.
