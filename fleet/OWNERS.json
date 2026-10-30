@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "comment": "Single source of write permissions. First matching glob wins. ** = any depth, * = one path segment. Owners: template (fleet/** and templates/**; only fleet/scripts/upgrade.sh, BOT_FLEET_UPGRADE=1), manager, self (bots/<slug>/ = bot <slug>). 'create' lists roles that may ADD new files under a self-owned tree (seeding a new bot / restore). examples/** exists only in the template repo (not copied to fleets; validated there only); in a fleet it is read-only if present. template/** and manager/** hold only 0.10.0 compatibility symlinks to the old paths (fleet/scripts/compat.sh); removed after every live prompt is re-rendered.",
+  "rules": [
+    {
+      "path": "fleet/**",
+      "owner": "template"
+    },
+    {
+      "path": "templates/**",
+      "owner": "template"
+    },
+    {
+      "path": ".github/**",
+      "owner": "template"
+    },
+    {
+      "path": "examples/**",
+      "owner": "template"
+    },
+    {
+      "path": "template/**",
+      "owner": "template"
+    },
+    {
+      "path": "manager/**",
+      "owner": "manager"
+    },
+    {
+      "path": "local/**",
+      "owner": "manager"
+    },
+    {
+      "path": "README.md",
+      "owner": "manager"
+    },
+    {
+      "path": "LICENSE",
+      "owner": "manager"
+    },
+    {
+      "path": "bots/*/**",
+      "owner": "self",
+      "create": [
+        "manager",
+        "builder"
+      ]
+    }
+  ]
+}

@@ -24,12 +24,12 @@ Legend: ✅ built and tested in this release · 🧪 proposed, not built yet.
 ## What you get
 
 - ✅ **A durable copy of every bot**: instructions, rules, routines, memory and state in plain files you own.
-- ✅ **Let your bot set it up**: a two-phase, chat-driven bootstrap. One bot becomes the manager, creates a builder bot, and the builder sets up the repo ([install-manager.md](template/docs/install-manager.md)).
+- ✅ **Let your bot set it up**: a two-phase, chat-driven bootstrap. One bot becomes the manager, creates a builder bot, and the builder sets up the repo ([install-manager.md](fleet/docs/install-manager.md)).
 - ✅ **Layered rules**: common rules → fleet overrides → your local rules → role → bot. Written as principles, not checklists.
 - ✅ **Roles**: `manager` (coordinates), `builder` (creates and maintains bots), `worker`, `retired`, with checks that a live fleet has one active manager and an active builder.
 - ✅ **Enforced ownership**: `OWNERS.json` + a pre-commit hook. A bot can only write its own folder.
 - ✅ **One worktree per bot** on a shared machine, with a per-worktree git identity.
-- ✅ **Thin prompt template**: `{{BOT_NAME}}`/`{{OWNER_NAME}}` placeholders rendered per bot from `manager/fleet.json`.
+- ✅ **Thin prompt template**: `{{BOT_NAME}}`/`{{OWNER_NAME}}` placeholders rendered per bot from `local/fleet.json`.
 - ✅ **Safety net**: snapshots outside git before every change, a restore runbook, a confidentiality scanner on every commit.
 - ✅ **Versioned upgrades** with idempotent migrations (`upgrade.sh`), plus CI validation and an end-to-end self-test.
 - ✅ **Ready-made example bots** (`examples/`: a notes keeper and a package tracker) and a **weekly audit**.
@@ -46,8 +46,8 @@ flowchart LR
   Egg -->|creates and upgrades| W1
   Egg -->|creates and upgrades| W2
   subgraph Git[Private fleet repo: the shared brain]
-    T[template/<br/>rules, scripts, docs]
-    M[manager/<br/>roster, roles, your rules]
+    T[fleet/<br/>rules, roles, scripts, docs]
+    M[local/<br/>roster, overrides, your rules]
     B[bots/&lt;slug&gt;/<br/>each bot's rules, memory, kb]
   end
   Chief <-->|read + write| Git
@@ -64,40 +64,40 @@ Names are yours to choose. "Chief" and "dr eggbot" are just suggestions; scripts
 ### Option A: let your bot do it (✅ two-phase bootstrap)
 You start with one bot and talk to it. You only sign in to GitHub yourself (`gh auth login` on the bots' machine); bots never handle your passwords or tokens.
 
-**Phase 1: pre-fleet.** Ask your bot: *"Follow template/docs/install-manager.md from https://github.com/yuntaoL/bot-fleet-template."*
+**Phase 1: pre-fleet.** Ask your bot: *"Follow fleet/docs/install-manager.md from https://github.com/yuntaoL/bot-fleet-template."*
 - It asks for names (Chief suggested) and your display name, checks prerequisites and, with your yes, creates a builder bot (dr eggbot suggested).
-- The builder follows [bootstrap-fleet.md](template/docs/bootstrap-fleet.md): private repo from this template, worktrees, per-bot git identity, rendered prompts, log and snapshot folders, then runs `selftest.sh` and `validate.sh --pre-fleet`.
+- The builder follows [bootstrap-fleet.md](fleet/docs/bootstrap-fleet.md): private repo from this template, worktrees, per-bot git identity, rendered prompts, log and snapshot folders, then runs `selftest.sh` and `validate.sh --pre-fleet`.
 - No bot's prompt changes yet. Both still run on platform memory.
 
-**Phase 2: conversion.** One bot at a time, with your yes at each step ([convert-to-fleet-bot.md](template/docs/convert-to-fleet-bot.md)):
+**Phase 2: conversion.** One bot at a time, with your yes at each step ([convert-to-fleet-bot.md](fleet/docs/convert-to-fleet-bot.md)):
 - The manager converts itself: snapshot → copy memory into git → git-first prompt with the old prompt as fallback → 5 verified runs → drop the fallback. The builder holds the rollback.
 - The builder then converts itself the same way, with the manager holding the rollback.
 - From then on the builder creates new bots on demand.
 
-The git side of both phases is tested end to end by `template/scripts/selftest.sh` (scratch repos, fake owner and bots, a forced rollback). Steps on the bot platform itself (creating a bot, editing its prompt) are done by your bots with your yes.
+The git side of both phases is tested end to end by `fleet/scripts/selftest.sh` (scratch repos, fake owner and bots, a forced rollback). Steps on the bot platform itself (creating a bot, editing its prompt) are done by your bots with your yes.
 
 ### Option B: by hand
 1. **Use this template** → create a **private** repo, clone it on the machine your bots share, set your git identity.
-2. `template/scripts/bootstrap.sh https://github.com/yuntaoL/bot-fleet-template.git && git push`
-3. Set `owner_name` and add bots to `manager/fleet.json`, seed `bots/<slug>/` (or `add-example.sh`), run `template/scripts/worktree.sh --all`.
-4. `template/scripts/render-prompt.sh <slug>` and put `bots/<slug>/THIN-PROMPT.md` at the top of each bot's instructions.
-5. `template/scripts/validate.sh` → green. Full guide: [ADOPTION.md](template/docs/ADOPTION.md).
+2. `fleet/scripts/bootstrap.sh https://github.com/yuntaoL/bot-fleet-template.git && git push`
+3. Set `owner_name` and add bots to `local/fleet.json`, seed `bots/<slug>/` (or `add-example.sh`), run `fleet/scripts/worktree.sh --all`.
+4. `fleet/scripts/render-prompt.sh <slug>` and put `bots/<slug>/THIN-PROMPT.md` at the top of each bot's instructions.
+5. `fleet/scripts/validate.sh` → green. Full guide: [ADOPTION.md](fleet/docs/ADOPTION.md).
 
 ## How it works
 
 | Piece | What it does | Status |
 |---|---|---|
-| Thin prompt | `template/defaults/THIN-PROMPT.tmpl`, rendered per bot by `render-prompt.sh`: go to your worktree, read your rule layers and state, follow them, write back | ✅ |
-| Rule layers | `template/rules/common.md` → `manager/overrides.md` → `manager/local/` → role → `bots/<slug>/rules.md` | ✅ |
-| Roles | Manager, builder, worker, retired defaults in `template/defaults/roles/` | ✅ |
-| Ownership | `template/OWNERS.json`, enforced by `check-boundary.sh` (pre-commit) and `validate.sh` (CI) | ✅ |
-| Saving | `template/scripts/sync.sh "msg" [paths]`: commit as yourself, rebase, push | ✅ |
+| Thin prompt | `templates/THIN-PROMPT.tmpl`, rendered per bot by `render-prompt.sh`: go to your worktree, read your rule layers and state, follow them, write back | ✅ |
+| Rule layers | `fleet/rules/common.md` → `local/overrides.md` → `local/rules/` → role → `bots/<slug>/rules.md` | ✅ |
+| Roles | Manager, builder, worker, retired defaults in `fleet/roles/` | ✅ |
+| Ownership | `fleet/OWNERS.json`, enforced by `check-boundary.sh` (pre-commit) and `validate.sh` (CI) | ✅ |
+| Saving | `fleet/scripts/sync.sh "msg" [paths]`: commit as yourself, rebase, push | ✅ |
 | Bootstrap state | `state.json` `bootstrap {phase, step, status, snapshot, rollbackHolder}`; reruns resume; `validate.sh --pre-fleet` for phase 1 | ✅ |
 | Upgrades | `upgrade.sh <version>` pulls a tagged template release and runs migrations | ✅ |
-| Audit | `template/docs/AUDIT.md` + `audit.sh`, weekly | ✅ |
+| Audit | `fleet/docs/AUDIT.md` + `audit.sh`, weekly | ✅ |
 | Restore | `RESTORE.md` rebuilds the fleet from the repo; `RESTORE-BOT.md` + `snapshot-fleet.sh` roll one bot back | ✅ |
-| Knowledge base layout | `bots/<slug>/kb/` with `INDEX.md` files (opt-in layout + warn-only checks, [KB-LAYOUT.md](template/docs/KB-LAYOUT.md)) | ✅ |
-| Template vs instance | Every change is classified first: generic changes go upstream, yours stay in `manager/` and `bots/` ([CONTRIBUTING](template/docs/CONTRIBUTING.md)) | ✅ |
+| Knowledge base layout | `bots/<slug>/kb/` with `INDEX.md` files (opt-in layout + warn-only checks, [KB-LAYOUT.md](fleet/docs/KB-LAYOUT.md)) | ✅ |
+| Template vs instance | Every change is classified first: generic changes go upstream, yours stay in `local/` and `bots/` ([CONTRIBUTING](fleet/docs/CONTRIBUTING.md)) | ✅ |
 | Shared skills | Hand-off, kb read/write, journal, notes publishing | 🧪 |
 | Two-level logs | One lean line per run in git; details on local disk, auto-cleaned | 🧪 |
 | Daily fast-forward | Builder routine that fast-forwards every worktree and reports anything dirty | 🧪 |
@@ -113,15 +113,15 @@ The git side of both phases is tested end to end by `template/scripts/selftest.s
 
 ## Customize it
 
-- **Any names.** Pick a slug and display name per bot in `manager/fleet.json`; the role does the work.
-- **Your rules** go in `manager/local/` and `manager/overrides.md`. They survive every upgrade.
-- **Template vs instance.** Ask "would a stranger using this template want it?" If yes, open a PR or issue on this template repo ([CONTRIBUTING](template/docs/CONTRIBUTING.md)). If not, it belongs in your fleet repo.
+- **Any names.** Pick a slug and display name per bot in `local/fleet.json`; the role does the work.
+- **Your rules** go in `local/rules/` and `local/overrides.md`. They survive every upgrade.
+- **Template vs instance.** Ask "would a stranger using this template want it?" If yes, open a PR or issue on this template repo ([CONTRIBUTING](fleet/docs/CONTRIBUTING.md)). If not, it belongs in your fleet repo.
 
 ## FAQ
 
 **Does my fleet repo have to be private?** Yes. It holds your rules and your bots' memory. Only this template is public.
 
-**What if my assistant platform loses a bot?** Create a fresh bot and tell it: *"Clone <repo> and follow template/docs/RESTORE.md."*
+**What if my assistant platform loses a bot?** Create a fresh bot and tell it: *"Clone <repo> and follow fleet/docs/RESTORE.md."*
 
 **Do I need to know git?** Not with Option A: your bots run the commands. You sign in to GitHub once.
 
@@ -144,7 +144,7 @@ The git side of both phases is tested end to end by `template/scripts/selftest.s
 
 ## Contributing
 
-Guidance changes go upstream first: open a PR against this repo. Each change bumps `template/VERSION`, adds a [CHANGELOG](template/docs/CHANGELOG.md) entry with migration notes and, if user data moves, an idempotent `template/migrations/X.Y.Z.sh`. Run `template/scripts/selftest.sh` before opening a PR. See [CONTRIBUTING](template/docs/CONTRIBUTING.md) and [VERSIONING](template/docs/VERSIONING.md). Keep it generic: no personal data in PRs.
+Guidance changes go upstream first: open a PR against this repo. Each change bumps `fleet/VERSION`, adds a [CHANGELOG](fleet/docs/CHANGELOG.md) entry with migration notes and, if user data moves, an idempotent `fleet/migrations/X.Y.Z.sh`. Run `fleet/scripts/selftest.sh` before opening a PR. See [CONTRIBUTING](fleet/docs/CONTRIBUTING.md) and [VERSIONING](fleet/docs/VERSIONING.md). Keep it generic: no personal data in PRs.
 
 ## License
 

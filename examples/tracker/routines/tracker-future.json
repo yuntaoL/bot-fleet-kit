@@ -5,7 +5,7 @@
   "status": "paused",
   "enabledWhen": "future.json non-empty (the bot pauses it when future.json is empty and resumes it when a request with a future startAt arrives)",
   "steps": [
-    "Work only in <wt> for fleet files; template/rules/routines.md has already loaded the rules and bots/<me>/state.json.",
+    "Work only in <wt> for fleet files; fleet/rules/routines.md has already loaded the rules and bots/<me>/state.json.",
     "Pull <queue-clone> (your private queue repo <queue-repo>) and read future.json (a JSON array; every entry has startAt in <timezone>).",
     "For each request whose startAt has passed, move it unchanged into queue.json and remove it from future.json.",
     "If anything moved, resume tracker-loop if it is paused.",
