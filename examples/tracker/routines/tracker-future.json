@@ -12,6 +12,7 @@
     "Do not check carriers or any other source; this routine only promotes due requests.",
     "Commit and push the queue repo only if a file changed; put the moved ids in the commit message.",
     "If future.json is empty, pause this routine.",
-    "Stay silent. Never message the user directly."
+    "Stay silent. Never message the user directly.",
+    "Journal every run, skips included, as the thin routine prompt says; the line's read: field must include `routine:tracker-future.json`."
   ]
 }

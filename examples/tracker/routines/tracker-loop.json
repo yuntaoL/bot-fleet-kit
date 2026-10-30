@@ -13,6 +13,7 @@
     "Update checkCount/lastStatus/updatedAt (<timezone>).",
     "End any request that hit its expected status, maxChecks or expiresAt: report the result (final status, check count, why it ended, plus any found value) to its requester bot(s) only, as a priority message; remove it, and put id, requester and result in the commit message.",
     "Commit and push the queue only if the file changed. If the queue is empty, pause this routine.",
-    "Stay silent otherwise. Never message the user directly."
+    "Stay silent otherwise. Never message the user directly.",
+    "Journal every run, skips included, as the thin routine prompt says; the line's read: field must include `routine:tracker-loop.json`."
   ]
 }

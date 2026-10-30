@@ -1,5 +1,11 @@
 # Changelog (template)
 
+## Unreleased (0.9.4)
+- **Template:** `ROUTINE-PROMPT.tmpl` step 4: every routine run's journal line ends with a `read:` field that must include a routine marker, `routine:<stepsFile name>` or `routine:<name>.json` when steps are inline (e.g. `read: rules|state|instructions|routine:tracker-loop.json`). A run line without it did not use the thin routine prompt.
+- **Examples:** tracker (`tracker-loop`, `tracker-future`) and notes-keeper (`daily-inbox-filing`, `weekly-vault-cleanup`) routines gain a final step naming their marker.
+- **Docs:** AGENT_GUIDE (adding a bot) and AUDIT.md item 9 (marker as proof of use).
+- Upgrade: after upgrading, re-render with `render-routine-prompt.sh <slug> --all`; until a bot's live routine prompts are re-pasted (owner's yes), `check-routines.sh` reports them as not the rendered thin prompt.
+
 ## 0.9.3 – 2026-10-29
 - **Example (tracker):** adds the future list: `examples/tracker/routines/tracker-future.json` (steps format; hourly within check hours, promotes requests whose `startAt` has passed from `future.json` into `queue.json`, resumes `tracker-loop`, pauses itself when empty), plus a Future section in rules.md and notes in README.md and instructions.md.
 - **Examples:** bundled example routines move their legacy `prompt` into `steps` (same instructions, split into steps): `examples/tracker/routines/tracker-loop.json` (rules-read preamble dropped; the thin routine prompt does it), `examples/notes-keeper/routines/daily-inbox-filing.json` and `weekly-vault-cleanup.json` (wording unchanged). No behaviour change.

@@ -14,6 +14,7 @@
     "Write Meta/Changelog/<YYYY-Www>.md.",
     "Big rewrites, merges, moves, renames, deletes and layout changes go into the proposal note with a short message to the user, and happen only after approval.",
     "Check the sync log at the end.",
-    "Message the user only when there are proposals or notable fixes."
+    "Message the user only when there are proposals or notable fixes.",
+    "Journal every run, skips included, as the thin routine prompt says; the line's read: field must include `routine:weekly-vault-cleanup.json`."
   ]
 }
