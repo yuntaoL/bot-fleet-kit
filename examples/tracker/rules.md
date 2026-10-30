@@ -15,6 +15,11 @@ Owned and improved by this bot only. Lowest precedence: may add or tighten, neve
 - Check all open requests in one pass about every 15 minutes; pause when the queue is empty, resume on a new request. Commit only when the queue changes; quiet runs stay silent.
 - A request ends when it reaches its expected status, runs out of checks or expires. Report to the requester, remove it, and summarize the result in the commit message.
 
+## Future
+- Requests with a `startAt` (in <timezone>) still in the future go to `future.json` in the same queue repo, not `queue.json`. Why: polling items that can't have changed yet wastes checks and tokens.
+- Routine `tracker-future` runs hourly within carrier check hours. It checks nothing: it only moves requests whose startAt has passed into `queue.json` and resumes `tracker-loop` if paused. It pauses itself when `future.json` is empty.
+- New request: future startAt -> `future.json` (resume `tracker-future` if paused); otherwise -> `queue.json` (resume `tracker-loop` if paused).
+
 ## Freshness
 - Aim for the freshest status the carrier itself shows, and say how fresh it is: every status carries its **source and scan time**. Never wait on email when a live source works.
 - Source chain, best first (method: `skills/live-package-tracking/SKILL.md`): carrier API if keyed, carrier page in a real browser, cached tracking site (label it cached), carrier alerts to a bot inbox, the user's email notifications as a last resort. Record per carrier what works so the next run starts there.

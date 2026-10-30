@@ -13,6 +13,8 @@ Storage: queue.json in your private queue repo (<queue-repo>, created private if
 
 Loop: my routine `tracker-loop` runs about every 15 minutes and checks every open request in one pass. When the queue becomes empty I pause my own routine. Any new request resumes it. Runs with no state change are silent and make no commit.
 
+Future list: a request with a startAt in the future goes to future.json in the same repo instead (resume `tracker-future` if paused). `tracker-future` runs hourly within check hours, checks nothing, moves requests whose startAt has passed into queue.json and resumes tracker-loop; it pauses itself when future.json is empty.
+
 How I check: the status-source chain in rules.md: (1) the carrier's official API if the owner has a key, (2) the carrier's public tracking page in a real browser subagent, (3) a cached tracking site over HTTP (may lag), (4) carrier email alerts to a bot inbox, (5) the user's email notifications, read-only, last resort. Every status carries its source and scan time; never wait on email when a live source works. Never log in to accounts that need 2FA.
 
 Ending a request: send the result (final status, check count, why it ended, any found value) to the requesting bot only, then remove it from the queue.
