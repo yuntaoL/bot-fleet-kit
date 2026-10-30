@@ -1,6 +1,11 @@
 # Changelog (template)
 
-## 0.10.0 – unreleased
+## 0.10.1 – unreleased
+
+- **Upgrade starter:** `fleet/scripts/upgrade.sh` is now a small, stable starter. It fetches tag `v<version>`, unpacks that version's scripts into `.git/fleet-upgrade/v<version>/` (inside `.git`, never tracked) and execs that version's own upgrade script against your worktree: `fleet/scripts/upgrade-run.sh` (0.10.1+), else `fleet/scripts/upgrade.sh` (0.10.0), else `template/scripts/upgrade.sh` (0.9.x). The upgrade logic moved unchanged to `fleet/scripts/upgrade-run.sh` (minus its old self-re-exec). A future layout change no longer breaks the command you type.
+- Upgrade: from 0.10.0, `BOT_ROLE=manager fleet/scripts/upgrade.sh 0.10.1 --dry-run`, then without `--dry-run`. No migration, no prompt changes.
+
+## 0.10.0 – 2026-10-30
 **Layout split (breaking path change, with compatibility links).** `template/` becomes `fleet/` (shared, upstream-owned, used as-is) and `templates/` (placeholder and starter files only); the fleet's `manager/` becomes `local/`; `bots/<slug>/` is unchanged.
 - **Moves:** `template/{VERSION,OWNERS.json,rules,docs,scripts,schema,migrations}` → `fleet/`; `template/defaults/roles` → `fleet/roles`; `template/defaults/fleet/skills` → `fleet/skills`; `template/defaults/{THIN,ROUTINE}-PROMPT.tmpl` → `templates/`; `template/defaults/bot` → `templates/bot`; `template/defaults/fleet` → `templates/local`. In a fleet: `manager/*` → `local/*`, `manager/local/*.md` → `local/rules/*.md`, `manager/local/roles/` → `local/roles/`.
 - **Roles are no longer copied.** Bots read `fleet/roles/<role>.md` directly, then the optional `local/roles/<role>.md`. The migration drops unedited `manager/roles/` copies and stops with a diff if one was edited (move the edit to `local/roles/<role>.md`, then re-run). validate.sh warns when a `local/roles/` file is only a copy of the fleet role.

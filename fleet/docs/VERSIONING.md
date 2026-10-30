@@ -13,7 +13,7 @@ git fetch origin && git rebase origin/main
 BOT_ROLE=manager fleet/scripts/upgrade.sh <version>
 git show --stat && git push origin HEAD:main
 ```
-`upgrade.sh`: fetches tag `v<version>` → re-runs itself from that tag → checks out `fleet/` and `.github/` → deletes template files the target removed (and legacy pre-0.4.0 paths) → runs `fleet/migrations/<v>.sh` for current < v ≤ target → creates missing fleet files → lists role-default differences → writes `fleet/VERSION` → reinstalls the hook → validates → commits with `BOT_FLEET_UPGRADE=1`.
+`upgrade.sh` (stable starter): fetches tag `v<version>` → unpacks that tag's scripts into `.git/fleet-upgrade/v<version>/` → execs that version's `fleet/scripts/upgrade-run.sh` (falls back to `fleet/scripts/upgrade.sh`, then `template/scripts/upgrade.sh`, for older tags). `upgrade-run.sh`: checks out `fleet/` and `.github/` → deletes template files the target removed (and legacy pre-0.4.0 paths) → runs `fleet/migrations/<v>.sh` for current < v ≤ target → creates missing fleet files → lists role-default differences → writes `fleet/VERSION` → reinstalls the hook → validates → commits with `BOT_FLEET_UPGRADE=1`.
 
 Fleets older than 0.3.2 must upgrade to 0.3.2 first (`scripts/upgrade.sh 0.3.2`), then to 0.4.0.
 The hook rejects hand edits to template-owned files; the only sanctioned deviation from common rules is a human-approved entry in `local/overrides.md`.
