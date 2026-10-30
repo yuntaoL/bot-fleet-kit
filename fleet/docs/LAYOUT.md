@@ -16,8 +16,9 @@ bot-fleet/
 │   ├── docs/  schema/            documentation; JSON Schemas
 │   ├── scripts/                  bootstrap, worktree, sync, upgrade, validate, audit, compat, owners.py, …
 │   └── migrations/               <version>.sh, idempotent
+├── .bot                          untracked, per worktree (0.10.5+): one line bots/<slug>/bot.json; how a bot finds itself
 ├── templates/                    template  placeholder/starter files only
-│   ├── THIN-PROMPT.tmpl  ROUTINE-PROMPT.tmpl
+│   ├── THIN-PROMPT.tmpl  ROUTINE-PROMPT.tmpl  bot.json.tmpl
 │   ├── bot/                      new-bot skeleton
 │   └── local/                    starter files copied into local/ once by init-fleet.sh
 ├── local/                        manager   this fleet's own files (was manager/ before 0.10.0)
@@ -28,6 +29,7 @@ bot-fleet/
 │   ├── registry/  shared/        bot cards; shared data (state/, skills/, scripts/, …)
 │   └── CHANGELOG.md              fleet history
 └── bots/<slug>/                  self      only bot <slug> (manager/builder may only ADD files)
+    ├── bot.json                  identity + environment (0.10.5+): the one copy prompts and routines read
     ├── profile.json  instructions.md  rules.md  memory.md  state.json  secrets.md
     ├── routines/  skills/  journal/
     └── <anything new>            no permission change needed

@@ -2,7 +2,7 @@
 # Usage: fleet/scripts/worktree.sh <slug> [base-dir]     (run from the shared clone, as any user of the machine)
 #        fleet/scripts/worktree.sh --all [base-dir]       (every non-retired bot in local/fleet.json)
 # Gives each bot its own git worktree (default /home/box/bot-fleet-worktrees/<slug>) on branch wt/<slug>,
-# tracking origin/main, with per-worktree identity (fleet.bot, fleet.role). Idempotent.
+# tracking origin/main, with per-worktree identity (fleet.bot, fleet.role) and the untracked pointer <wt>/.bot (0.10.5+). Idempotent.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 base="${2:-${BOT_FLEET_WORKTREES:-$(dirname "$PWD")/bot-fleet-worktrees}}"
@@ -20,6 +20,7 @@ mk(){ slug="$1"
   git -C "$wt" config --worktree fleet.bot "$slug"
   git -C "$wt" config --worktree fleet.role "$role"
   git -C "$wt" config --worktree push.default upstream
+  fleet/scripts/bot-pointer.sh "$slug" "$wt" >/dev/null   # 0.10.5+: untracked <wt>/.bot -> bots/<slug>/bot.json
   echo "worktree: $wt (branch wt/$slug -> origin/main, role $role)"
 }
 if [ "${1:?usage: worktree.sh <slug>|--all [base-dir]}" = "--all" ]; then

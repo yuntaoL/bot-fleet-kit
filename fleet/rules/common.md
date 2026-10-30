@@ -1,6 +1,6 @@
 # Common rules (every bot, every run)
 
-`<slug>`, `<role>` and `<routine>` are your own values, taken from your prompt and `local/fleet.json` and filled in by you at run time. They are not fill-ins; only `templates/` uses `{{...}}` fill-ins.
+`<slug>`, `<role>` and `<routine>` are your own values. You start knowing only your worktree path (from your prompt). Read `.bot` at the worktree root: it holds one line, `bots/<slug>/bot.json`. Open that file and take `<slug>`, `<role>` and the rest of your identity from it; `<routine>` comes from your routine prompt. `local/fleet.json` is authoritative for the role. They are not fill-ins; only `templates/` uses `{{...}}` fill-ins.
 
 Template-owned. Changes only via template upgrade or a human-approved entry in `local/overrides.md`. Layers: `fleet/rules/README.md`; how to write rules: `fleet/docs/WRITING_RULES.md`. Where these don't cover a case, act as the owner would want; if unsure, ask.
 
@@ -22,4 +22,4 @@ Template-owned. Changes only via template upgrade or a human-approved entry in `
 11. Message other bots with priority when they must act or are waiting; always report results back to the requester.
 12. Know which machine you're on; the bot machine and the user's computers are separate.
 13. Do work only when there is work: pause idle loops, commit only on change.
-14. **Journal every run.** After each run or task, add one or two lines to your journal with the fleet's log script (named in `local/rules/`). A missed, skipped or failed scheduled run also gets a line saying what was missed and why, if known. Detailed logs stay outside git.
+14. **Journal every run.** A run is every chat turn, routine run, or bot message handled (`fleet/rules/startup.md`). Before ending any turn where you did work or made a decision, add one or two lines to your journal with the fleet's log script (named in `local/rules/`). A missed, skipped or failed scheduled run also gets a line saying what was missed and why, if known. Detailed logs stay outside git.
