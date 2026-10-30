@@ -1,5 +1,8 @@
 # Changelog (template)
 
+## Unreleased (0.9.3)
+- **Example:** `examples/tracker/routines/tracker-loop.json` moves its legacy `prompt` into `steps` (same instructions, split into steps; the rules-read preamble is dropped because the thin routine prompt does it). No behaviour change.
+
 ## 0.9.2 – 2026-10-29
 Thin routine prompts. Additive; legacy routines keep working.
 - **Template:** `template/defaults/ROUTINE-PROMPT.tmpl` (`{{BOT_NAME}}`, `{{OWNER_NAME}}`, `{{SLUG}}`, `{{ROLE}}`, `{{WORKTREE}}`, `{{ROUTINE}}`): pull, read the rules in thin-prompt order, follow `bots/<slug>/routines/<name>.json` `steps` (or `stepsFile`; legacy `prompt` as fallback), journal every run including skips, `sync.sh`, fail safe.
