@@ -115,7 +115,7 @@ The git side of both phases is tested end to end by `template/scripts/selftest.s
 
 - **Any names.** Pick a slug and display name per bot in `manager/fleet.json`; the role does the work.
 - **Your rules** go in `manager/local/` and `manager/overrides.md`. They survive every upgrade.
-- **Template vs instance.** Ask "would a stranger using this template want it?" If yes, propose it upstream ([CONTRIBUTING](template/docs/CONTRIBUTING.md)). If not, it belongs in your fleet repo.
+- **Template vs instance.** Ask "would a stranger using this template want it?" If yes, open a PR or issue on this template repo ([CONTRIBUTING](template/docs/CONTRIBUTING.md)). If not, it belongs in your fleet repo.
 
 ## FAQ
 

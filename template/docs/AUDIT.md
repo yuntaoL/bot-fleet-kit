@@ -1,6 +1,6 @@
 # Weekly fleet audit (manager)
 
-Goal: the fleet's files still say what we mean, match what the bots actually do, and hold nothing they shouldn't. Run `template/scripts/audit.sh` for the mechanical part, then use judgment for the rest. Fix what's yours (manager/), ask bots by message to fix their own folders, and propose template changes upstream.
+Goal: the fleet's files still say what we mean, match what the bots actually do, and hold nothing they shouldn't. Run `template/scripts/audit.sh` for the mechanical part, then use judgment for the rest. Fix what's yours (manager/), ask bots by message to fix their own folders, and open a PR or issue on the template repo for template changes.
 
 ## Checklist
 1. **CI and validate:** latest CI run green; `validate.sh` passes.

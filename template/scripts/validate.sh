@@ -3,7 +3,7 @@
 # Usage: template/scripts/validate.sh [--pre-fleet]
 #   --pre-fleet  bootstrap phase 1 (0.8.0+): structure + worktree identity; needs one manager and a builder listed (any status);
 #                skips the ACTIVE-role invariants. Default mode WARNS (0.8.0) when there is no active manager/builder;
-#                BOT_FLEET_STRICT_ROLES=1 makes those failures (planned default in a later release).
+#                BOT_FLEET_STRICT_ROLES=1 makes those (and 0.9.0 role drift) failures (planned default in a later release).
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 MODE=fleet; [ "${1:-}" = "--pre-fleet" ] && MODE=pre-fleet
@@ -100,6 +100,12 @@ else:
         if [b["role"] for b in act].count("builder")<1: rep("required roles: need at least one ACTIVE builder (bot creation and restores)")
     pend=[b["slug"] for b in bots if b.get("status") in ("pre-fleet","converting")]
     if pend: warn(f"bootstrap in progress for {pend}; phase-1 checks: validate.sh --pre-fleet")
+# 0.9.0 role drift: manager/roles/*.md are template-owned copies
+import filecmp
+for x in ["manager","builder","worker","retired"]:
+    m,t=f"manager/roles/{x}.md",f"template/defaults/roles/{x}.md"
+    if os.path.exists(m) and os.path.exists(t) and not filecmp.cmp(m,t,shallow=False):
+        (fail if strict else warn)(f"role drift: {m} differs from {t}; move additions to manager/local/roles/{x}.md")
 if w: print(f"validate: {w} bootstrap warning(s) (not failures)")
 sys.exit(1 if e else 0)
 PY

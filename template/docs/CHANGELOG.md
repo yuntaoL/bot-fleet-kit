@@ -1,5 +1,18 @@
 # Changelog (template)
 
+## 0.9.0 – 2026-10-29
+Role-files realign. Keeps fleets in sync with template role files so upgrades need no hand merges.
+- **Role defaults:** bare `docs/...` paths fixed to `template/docs/...` (AUDIT, RESTORE, install-manager, bootstrap-fleet, convert-to-fleet-bot); roles are read from the fleet root. The manager's boundaries placeholder becomes a generic reach bullet plus a pointer to `manager/local/roles/manager.md`.
+- **Common rules:** new rule 14 "Journal every run" (one place for all roles); rule 4 read order adds `manager/local/roles/<role>.md` and limits `manager/local/` to top-level files.
+- **Thin prompt:** `THIN-PROMPT.tmpl` step 2 reads `manager/local/*.md` (top-level only), then `manager/roles/{{ROLE}}.md`, then `manager/local/roles/{{ROLE}}.md` if it exists. Already rendered prompts keep working; re-render to pick up the new read order.
+- **upgrade.sh:** role files equal to the current or target default are copied automatically; an edited one stops the upgrade with a diff before anything changes (`BOT_FLEET_KEEP_ROLES=1` keeps it and continues).
+- **validate.sh:** WARN `role drift` when `manager/roles/<role>.md` differs from the template default (FAIL under `BOT_FLEET_STRICT_ROLES=1`).
+- **selftest.sh:** fails on bare `docs/` paths in role defaults; negative check for role drift.
+- **Review fixes:** role defaults drop the bootstrap-phase lines (bootstrap docs are read by the owner/manager before the repo exists, not from role files); builder keeps "only builders create bots", manager keeps the one-manager/one-builder invariant. Thin prompt fail-safe reports through one channel: the manager, or the owner only if the bot is the manager or the manager is unreachable.
+- **Template changes are maintainer-owned:** managers no longer propose or make template changes; a manager that wants one opens a PR or issue on the template repo (manager role, CONTRIBUTING, AUDIT, fleet-change skill, README).
+- **CONTRIBUTING.md:** "Role files are template-owned copies". New section "Template branches start from current main" (fresh clone of origin/main, ancestry check before a PR). Log scripts stay instance; fleets name theirs in `manager/local/`.
+- No migration. Upgrade: move local role edits to `manager/local/roles/<role>.md` and reset `manager/roles/` first (or `BOT_FLEET_KEEP_ROLES=1`), then `BOT_ROLE=manager template/scripts/upgrade.sh 0.9.0`; optionally re-render prompts.
+
 ## 0.8.0 – 2026-10-29
 Bootstrap release. Additive: no files removed or renamed; existing fleets keep working without changes (new checks warn, never fail, unless opted in).
 - **Two-phase bootstrap (bot-driven setup):** `template/docs/install-manager.md` (Part A phase 1 pre-fleet: names, prerequisites, create the builder with the owner's yes, delegate, exit check; Part B phase 2: manager converts itself, then supervises the builder), `template/docs/bootstrap-fleet.md` (builder environment setup; rerunnable repair guide), `template/docs/convert-to-fleet-bot.md` (snapshot → `converting` → copy memory → git-first prompt with fallback → N=5 verified runs → contract; named rollback holder). `ADOPTION.md` points to the bot-driven path; the manual path is unchanged.

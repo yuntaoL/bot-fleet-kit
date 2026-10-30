@@ -11,6 +11,8 @@ T="$(mktemp -d)"; [ "$KEEP" = --keep ] || trap 'rm -rf "$T"' EXIT
 ok(){ echo "PASS $*"; }; die(){ echo "FAIL $*" >&2; exit 1; }
 export GIT_AUTHOR_NAME=selftest GIT_AUTHOR_EMAIL=selftest@example.invalid GIT_COMMITTER_NAME=selftest GIT_COMMITTER_EMAIL=selftest@example.invalid
 export GIT_CONFIG_GLOBAL="$T/gitconfig"; git config --global init.defaultBranch main; git config --global user.name selftest; git config --global user.email selftest@example.invalid
+# 0. role defaults never use bare docs/ paths (roles are read from the fleet root, docs live at template/docs/)
+! grep -nE '(^|[^/[:alnum:]_])docs/' "$SRC"/template/defaults/roles/*.md || die "bare docs/ path in template/defaults/roles (use template/docs/)"; ok "role defaults use template/docs/ paths"
 # 1. throwaway public template (only template-repo paths) + tag
 mkdir -p "$T/tpl"; (cd "$SRC" && tar -cf - template .github README.md LICENSE $( [ -d examples ] && echo examples ) 2>/dev/null) | tar -x -C "$T/tpl"
 V="$(cat "$T/tpl/template/VERSION")"
@@ -65,5 +67,7 @@ conv forge atlas; reg forge active; ok "builder converted after rollback (rollba
   && ! BOT_FLEET_STRICT_ROLES=1 template/scripts/validate.sh >/dev/null 2>&1 && template/scripts/validate.sh 2>&1 | grep -c "WARN required roles" >/dev/null && git checkout -q manager/fleet.json) || die "required-role invariant"
 (cd "$BOT_FLEET_WORKTREES/atlas" && echo '{{OWNER_NAME}}' >> bots/atlas/THIN-PROMPT.md && ! template/scripts/validate.sh >/dev/null 2>&1 && git checkout -q bots/atlas/THIN-PROMPT.md) || die "placeholder check"
 (cd "$BOT_FLEET_WORKTREES/forge" && echo x > bots/atlas/x.md && git add bots/atlas/x.md; r=0; git commit -qm "forge: write atlas" >/dev/null 2>&1 || r=1; git reset -q; rm -f bots/atlas/x.md; [ $r = 1 ]) || die "ownership hook"
-ok "negative checks (no active builder warns/fails strict; leftover {{...}} fails; cross-bot write blocked)"
+(cd "$BOT_FLEET_WORKTREES/atlas" && echo "- local edit" >> manager/roles/worker.md && { out="$(template/scripts/validate.sh 2>&1)"; grep -q "WARN role drift: manager/roles/worker.md" <<<"$out"; } \
+  && ! BOT_FLEET_STRICT_ROLES=1 template/scripts/validate.sh >/dev/null 2>&1 && git checkout -q manager/roles/worker.md) || die "role drift check"
+ok "negative checks (no active builder warns/fails strict; leftover {{...}} fails; role drift warns/fails strict; cross-bot write blocked)"
 echo "selftest: ALL PASS ($T)"
