@@ -10,3 +10,4 @@ jobs:
       - run: pip install jsonschema
       - run: template/scripts/validate.sh
       - run: template/scripts/audit.sh
+      - run: template/scripts/selftest.sh
