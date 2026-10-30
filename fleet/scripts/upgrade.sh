@@ -16,6 +16,7 @@ git rev-parse -q --verify "v$target^{commit}" >/dev/null || { echo "no tag v$tar
 dir="$(git rev-parse --absolute-git-dir)/fleet-upgrade/v$target"; rm -rf "$dir"; mkdir -p "$dir"
 for e in fleet/scripts/upgrade-run.sh fleet/scripts/upgrade.sh template/scripts/upgrade.sh; do
   git cat-file -e "v$target:$e" 2>/dev/null || continue
+  [ "$e" = template/scripts/upgrade.sh ] && [ "${2:-}" = --dry-run ] && { echo "v$target predates --dry-run; nothing changed" >&2; exit 1; }
   git archive "v$target" "$(dirname "$e")" | tar -x -C "$dir"
   echo "upgrade: running $e from v$target"
   BOT_FLEET_UPGRADE_NOFETCH=1 BOT_FLEET_UPGRADE_REEXEC=1 exec bash "$dir/$e" "$@"
