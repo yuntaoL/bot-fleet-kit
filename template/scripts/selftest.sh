@@ -93,5 +93,20 @@ echo '{"name":"Robin"}' > "$PR/fake-pip/profile.json"
 (cd "$A" && h="$(git rev-parse HEAD)"; r=0; out="$(template/scripts/check-names.sh "$PR")" || r=$?; [ $r = 3 ] && grep -q "DRIFT wren: fleet.json name 'Wren' != live name 'Robin'" <<<"$out" \
   && [ "$(git rev-parse HEAD)" = "$h" ] && [ -z "$(git status --porcelain)" ]) || die "check-names drift"
 ok "rename drift: check-names clean, then DRIFT (exit 3) with old+new names, repo unchanged"
+# thin routines (0.9.2): render, schema, stepsFile, live drift
+(cd "$A" && git pull -q --ff-only && mkdir -p bots/atlas/routines && printf '{"name":"daily-check","schedule":"0 9 * * *","steps":["Check the inbox.","Journal the result."]}\n' > bots/atlas/routines/daily-check.json \
+  && printf '{"name":"old-one","schedule":"0 8 * * *","prompt":"do everything"}\n' > bots/atlas/routines/old-one.json \
+  && template/scripts/render-routine-prompt.sh atlas >/dev/null && P2=bots/atlas/routines/daily-check.prompt.md \
+  && grep -q "You are Atlas, one bot in Alex Test's fleet, running routine \`daily-check\`" $P2 && grep -q "bots/atlas/routines/daily-check.json" $P2 && ! grep -q '{{' $P2 \
+  && template/scripts/validate.sh >/dev/null) || die "render-routine-prompt / schema"
+(cd "$A" && out="$(template/scripts/check-routines.sh "$T/none")" && grep -q "WARN bots/atlas/routines/old-one.json: legacy fat prompt" <<<"$out") || die "check-routines legacy"
+LA="$T/ag/fake-atlas/automations"; mkdir -p "$LA"
+(cd "$A" && python3 -c "import json,sys;json.dump({'name':'daily-check','prompt':open('bots/atlas/routines/daily-check.prompt.md').read()},open('$LA/a.json','w'))" \
+  && ! template/scripts/check-routines.sh "$T/ag" | grep -q "live routine 'daily-check'" \
+  && echo '{"name":"daily-check","prompt":"stale fat prompt"}' > "$LA/a.json" && template/scripts/check-routines.sh "$T/ag" | grep -q "WARN atlas: live routine 'daily-check' is not the rendered thin prompt") || die "check-routines live drift"
+(cd "$A" && printf '{"name":"x","schedule":"daily","stepsFile":"bots/atlas/routines/nope.md"}\n' > bots/atlas/routines/x.json && ! template/scripts/validate.sh >/dev/null 2>&1 && rm bots/atlas/routines/x.json \
+  && printf '{"name":"y","schedule":"daily"}\n' > bots/atlas/routines/y.json && ! template/scripts/validate.sh >/dev/null 2>&1 && rm bots/atlas/routines/y.json) || die "routine negative checks"
+(cd "$A" && rm -f bots/atlas/routines/*.json bots/atlas/routines/*.prompt.md && git checkout -q -- bots/atlas 2>/dev/null; git status --porcelain | grep -q . && git clean -qfd bots/atlas; true)
+ok "thin routines (render, legacy+steps schema, legacy WARN, live match/drift, missing stepsFile and no-instructions fail)"
 ok "negative checks (no active builder warns/fails strict; leftover {{...}} fails; role drift warns/fails strict; cross-bot write blocked; worktree dir mismatch warns)"
 echo "selftest: ALL PASS ($T)"

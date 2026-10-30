@@ -1,5 +1,15 @@
 # Changelog (template)
 
+## 0.9.2 – 2026-10-29
+Thin routine prompts. Additive; legacy routines keep working.
+- **Template:** `template/defaults/ROUTINE-PROMPT.tmpl` (`{{BOT_NAME}}`, `{{OWNER_NAME}}`, `{{SLUG}}`, `{{ROLE}}`, `{{WORKTREE}}`, `{{ROUTINE}}`): pull, read the rules in thin-prompt order, follow `bots/<slug>/routines/<name>.json` `steps` (or `stepsFile`; legacy `prompt` as fallback), journal every run including skips, `sync.sh`, fail safe.
+- **Schema:** `routine.schema.json` gains `steps` (string or list) and `stepsFile`; needs one of `prompt`, `steps`, `stepsFile` (was: `prompt` required). The default example uses `steps`.
+- **Script:** `template/scripts/render-routine-prompt.sh <slug> [<routine>|--all] [--stdout]` writes `bots/<slug>/routines/<name>.prompt.md`.
+- **Checks:** `validate.sh` FAILs on a missing `stepsFile` or `{{...}}` left in a `*.prompt.md`. `template/scripts/check-routines.sh` (read-only; run by `audit.sh`) WARNs on routine files with only a legacy `prompt` and, when live automations are readable (`<agent-data>/<id>/automations/*.json`), on live routine prompts that are not the rendered thin one; unreadable data is skipped. AUDIT.md item 9.
+- **Docs:** AGENT_GUIDE (adding a bot), convert-to-fleet-bot (step 4b), fleet-change and rename-bot skills.
+- **selftest.sh:** render, schema (legacy and steps), missing stepsFile, live drift detection.
+- Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.9.2`; then per bot move routine text into `steps` before switching live routine prompts (owner's yes).
+
 ## 0.9.1 – 2026-10-29
 Rename support and a thin-prompt read fix. Additive; no migration.
 - **Skill:** `template/defaults/fleet/skills/rename-bot/SKILL.md` (builder-owned): display name, slug/folder, worktree + branch as expand-then-contract steps (snapshot, clean-worktree check, reference grep without history, fleet.json/registry, copy then remove folder, worktree move + `branch -m` + prune, re-render, outside-git checklist for the bot itself: profile, routine prompts, skills, notes; validate, fleet-wide pull, verify, rollback). `builder.md` points to it.

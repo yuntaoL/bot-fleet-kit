@@ -8,6 +8,7 @@ Before starting, name the **rollback holder** (a different, working bot, plus th
 2. **Registry.** `manager/fleet.json` status `pre-fleet` → `converting` (manager commits).
 3. **Copy knowledge in.** Copy (do not delete anything from the platform) the bot's durable memory, rules and routine definitions into `bots/<slug>/` (`rules.md`, `kb/`, `routines/*.json`, `state.json`). Keep confidential items out of git (`confidential-scan.sh` runs on every commit).
 4. **Expand the prompt.** `template/scripts/render-prompt.sh <slug>`; with the user's yes set the platform prompt to the rendered `THIN-PROMPT.md` **followed by** the old prompt under a heading "Fallback (old prompt; git wins on conflict)".
+4b. **Thin routines (0.9.2+).** For each live routine: copy its saved prompt into `routines/<name>.json` `steps` first (commit), then `template/scripts/render-routine-prompt.sh <slug>`; with the user's yes set the live routine prompt to `routines/<name>.prompt.md` followed by the old prompt as a fallback block. Contract with step 6.
 5. **Verify N runs (default 5).** Each run must read from git and save back with `sync.sh`; the rollback holder checks evidence (commits, files) and increments `bootstrap.verifiedRuns`.
 6. **Contract.** With the user's yes, remove the fallback block; status `converting` → `active`; `bootstrap.status: done`.
 
