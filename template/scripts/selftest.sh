@@ -69,5 +69,22 @@ conv forge atlas; reg forge active; ok "builder converted after rollback (rollba
 (cd "$BOT_FLEET_WORKTREES/forge" && echo x > bots/atlas/x.md && git add bots/atlas/x.md; r=0; git commit -qm "forge: write atlas" >/dev/null 2>&1 || r=1; git reset -q; rm -f bots/atlas/x.md; [ $r = 1 ]) || die "ownership hook"
 (cd "$BOT_FLEET_WORKTREES/atlas" && echo "- local edit" >> manager/roles/worker.md && { out="$(template/scripts/validate.sh 2>&1)"; grep -q "WARN role drift: manager/roles/worker.md" <<<"$out"; } \
   && ! BOT_FLEET_STRICT_ROLES=1 template/scripts/validate.sh >/dev/null 2>&1 && git checkout -q manager/roles/worker.md) || die "role drift check"
-ok "negative checks (no active builder warns/fails strict; leftover {{...}} fails; role drift warns/fails strict; cross-bot write blocked)"
+# rename (0.9.1, rename-bot skill): pip -> wren, folder + worktree + branch
+A="$BOT_FLEET_WORKTREES/atlas"; R=template/scripts/rename-bot.sh
+(cd "$A" && git pull -q --ff-only && template/scripts/worktree.sh pip >/dev/null && h="$(git rev-parse HEAD)" && $R pip wren expand --dry-run >/dev/null && $R pip wren worktree --dry-run >/dev/null \
+  && [ "$(git rev-parse HEAD)" = "$h" ] && [ ! -e bots/wren ] && [ -d "$BOT_FLEET_WORKTREES/pip" ]) || die "rename dry-run changed something"
+(cd "$A" && python3 -c "import json;p='manager/fleet.json';f=json.load(open(p));[b.update(slug='wren',name='Wren',previousSlugs=['pip']) for b in f['bots'] if b['slug']=='pip'];json.dump(f,open(p,'w'),indent=2)" \
+  && template/scripts/sync.sh "rename pip -> wren (registry)" manager/ >/dev/null) || die "rename registry"
+(cd "$BOT_FLEET_WORKTREES/forge" && git pull -q --ff-only && BOT_RESTORE=1 $R pip wren expand >/dev/null && git push -q origin HEAD:main) || die "rename expand"
+(cd "$A" && git pull -q --ff-only && $R pip wren worktree >/dev/null) || die "rename worktree"
+W="$BOT_FLEET_WORKTREES/wren"; [ -d "$W" ] && [ ! -e "$BOT_FLEET_WORKTREES/pip" ] && [ "$(git -C "$W" config fleet.bot)" = wren ] && [ "$(git -C "$W" branch --show-current)" = wt/wren ] || die "rename worktree result"
+(cd "$W" && git pull -q --ff-only && template/scripts/render-prompt.sh wren >/dev/null && grep -q "You are Wren" bots/wren/THIN-PROMPT.md && template/scripts/sync.sh "re-render" bots/wren/ >/dev/null \
+  && BOT_NAME=pip $R pip wren contract >/dev/null && git push -q origin HEAD:main && [ ! -e bots/pip ]) || die "rename contract"
+(cd "$A" && git pull -q --ff-only && out="$(BOT_FLEET_STRICT_ROLES=1 template/scripts/validate.sh 2>&1)" && ! grep -q "WARN worktree" <<<"$out" \
+  && [ "$($R pip wren refs)" = "rename-bot: no references" ]) || die "validate/refs after rename"
+ok "rename pip -> wren (dry-run no-op, registry, expand, worktree+branch move, re-render, contract, validate clean)"
+# negative: worktree dir != fleet.bot warns (used to be skipped silently)
+(cd "$A" && git worktree move "$W" "$BOT_FLEET_WORKTREES/wren-old" && { out="$(template/scripts/validate.sh 2>&1)"; grep -q "WARN worktree dir .*wren-old != fleet.bot 'wren'" <<<"$out"; } \
+  && git worktree move "$BOT_FLEET_WORKTREES/wren-old" "$W") || die "worktree dir mismatch check"
+ok "negative checks (no active builder warns/fails strict; leftover {{...}} fails; role drift warns/fails strict; cross-bot write blocked; worktree dir mismatch warns)"
 echo "selftest: ALL PASS ($T)"

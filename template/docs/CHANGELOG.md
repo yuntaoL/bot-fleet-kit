@@ -1,5 +1,15 @@
 # Changelog (template)
 
+## 0.9.1 – 2026-10-29
+Rename support and a thin-prompt read fix. Additive; no migration.
+- **Skill:** `template/defaults/fleet/skills/rename-bot/SKILL.md` (builder-owned): display name, slug/folder, worktree + branch as expand-then-contract steps (snapshot, clean-worktree check, reference grep without history, fleet.json/registry, copy then remove folder, worktree move + `branch -m` + prune, re-render, outside-git checklist for the bot itself: profile, routine prompts, skills, notes; validate, fleet-wide pull, verify, rollback). `builder.md` points to it.
+- **Script:** `template/scripts/rename-bot.sh <old> <new> <refs|expand|worktree|contract> [--dry-run]` does the git parts.
+- **validate.sh:** WARN (FAIL with `--pre-fleet`) when a worktree dir differs from its `fleet.bot`, WARN on branch != `wt/<fleet.bot>` or a `fleet.bot` not in fleet.json. Previously a dir named differently from its slug was skipped silently.
+- **Schema:** optional `previousSlugs` per bot in fleet.json.
+- **Thin prompt:** step 2 also reads `bots/{{SLUG}}/instructions.md` if it exists. Re-render to pick it up.
+- **selftest.sh:** rename end to end (dry-run no-op, expand, worktree move, validate clean, contract) and a negative check for a mismatched worktree dir.
+- Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.9.1` (builder.md updates automatically if unedited).
+
 ## 0.9.0 – 2026-10-29
 Role-files realign. Keeps fleets in sync with template role files so upgrades need no hand merges.
 - **Role defaults:** bare `docs/...` paths fixed to `template/docs/...` (AUDIT, RESTORE, install-manager, bootstrap-fleet, convert-to-fleet-bot); roles are read from the fleet root. The manager's boundaries placeholder becomes a generic reach bullet plus a pointer to `manager/local/roles/manager.md`.

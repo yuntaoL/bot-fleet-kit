@@ -88,6 +88,18 @@ for b in bots:
         got=subprocess.run(["git","-C",wt,"config","--get","fleet.bot"],capture_output=True,text=True).stdout.strip()
         if got!=b["slug"]: (fail if mode=="pre-fleet" else warn)(f"worktree {wt}: fleet.bot='{got}', expected '{b['slug']}'")
     elif mode=="pre-fleet": fail(f"missing worktree {wt} (run template/scripts/worktree.sh {b['slug']})")
+# 0.9.1: every worktree dir must match its fleet.bot (a mismatch used to be skipped silently)
+wl=subprocess.run(["git","worktree","list","--porcelain"],capture_output=True,text=True).stdout
+known={b["slug"] for b in bots}
+for blk in wl.strip().split("\n\n"):
+    ln=dict(l.split(" ",1) for l in blk.splitlines() if " " in l)
+    wt=ln.get("worktree","")
+    if os.path.dirname(os.path.abspath(wt))!=os.path.abspath(base): continue
+    got=subprocess.run(["git","-C",wt,"config","--get","fleet.bot"],capture_output=True,text=True).stdout.strip()
+    d=os.path.basename(wt); br=ln.get("branch","").replace("refs/heads/","")
+    if got and got!=d: (fail if mode=="pre-fleet" else warn)(f"worktree dir {wt} != fleet.bot '{got}' (rename: rename-bot skill)")
+    if got and br and br!=f"wt/{got}": warn(f"worktree {wt}: branch '{br}', expected 'wt/{got}'")
+    if got and got not in known: warn(f"worktree {wt}: fleet.bot '{got}' not in fleet.json")
 if mode=="pre-fleet":
     roles=[b["role"] for b in bots]
     if roles.count("manager")!=1: fail("pre-fleet: fleet.json needs exactly one manager")
