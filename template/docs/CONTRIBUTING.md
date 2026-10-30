@@ -14,7 +14,7 @@ These apply inside a fleet (the rules above apply to this template repo). They a
 **Classify every change.**
 - **Template:** generic, useful to any fleet forked from this template, no owner data (prompt shape, common rules, scripts, OWNERS, schemas, layout, shared-skill mechanisms, audit checks).
 - **Instance:** names the owner's bots, people, rules, schedules or data; lives in `manager/` or `bots/<slug>/`. Mixed changes are split.
-- Template changes: the manager edits the template and its guidance upstream, bumps VERSION and CHANGELOG, releases via `upgrade.sh`; the builder (fleet syncer) rolls it out to every worktree.
+- Template changes: come from the template repo's maintainers (PR, VERSION and CHANGELOG bump, tag). A fleet's manager that wants one opens a PR or issue on the [template repo](https://github.com/yuntaoL/bot-fleet-template); once released, the manager adopts it via `upgrade.sh` and the builder (fleet syncer) rolls it out to every worktree.
 - Instance changes: the manager proposes; after owner approval the builder applies them, asking each bot to edit only files it owns. Bot profile or prompt changes always need owner approval.
 
 **Deploy safely.**
@@ -28,5 +28,5 @@ These apply inside a fleet (the rules above apply to this template repo). They a
 ## Role files are template-owned copies (added 0.9.0)
 - `manager/roles/<role>.md` are exact copies of `template/defaults/roles/<role>.md`. Never edit them in a fleet: `upgrade.sh` replaces unedited copies automatically and stops with a diff when one was edited; `validate.sh` warns on drift (`BOT_FLEET_STRICT_ROLES=1` fails).
 - Fleet-specific role additions go in `manager/local/roles/<role>.md` (optional; read right after the role file). Fleet-wide local rules stay in top-level `manager/local/*.md`; human-approved deviations from common rules stay in `manager/overrides.md`.
-- A role addition that would help any fleet is a template change: propose it here instead.
+- A role addition that would help any fleet is a template change: open a PR or issue on this template repo instead.
 - Fleet-specific tooling (for example a journal/log script and where detailed logs live) stays instance: name it in `manager/local/*.md` so common rule 14 can point to it.
