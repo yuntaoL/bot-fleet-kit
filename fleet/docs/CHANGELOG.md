@@ -1,8 +1,9 @@
 # Changelog (template)
 
-## 0.10.3 – unreleased
+## 0.10.3 – 2026-10-30
 
 - **validate.sh:** a routine with `"private": true` no longer fails when its `stepsFile` is missing (private steps are git-ignored and exist only in their own bot's worktree), but its name must still match `routines/private-*.steps.md`. Warns when a `stepsFile` is not repo-relative (`bots/<slug>/routines/...`), e.g. a bare filename.
+- Upgrade: from 0.10.2, `BOT_ROLE=manager fleet/scripts/upgrade.sh 0.10.3 --dry-run`, then without `--dry-run`. No migration, no prompt change.
 
 ## 0.10.2 – 2026-10-30
 
