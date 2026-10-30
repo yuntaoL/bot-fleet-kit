@@ -8,6 +8,6 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install jsonschema
-      - run: template/scripts/validate.sh
-      - run: template/scripts/audit.sh
-      - run: template/scripts/selftest.sh
+      - run: fleet/scripts/validate.sh
+      - run: fleet/scripts/audit.sh
+      - run: fleet/scripts/selftest.sh

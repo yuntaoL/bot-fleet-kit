@@ -11,12 +11,12 @@ Generic, shareable bot packages in the same layout as `bots/<slug>/`, with no pe
 
 ## Add one to your fleet (manager worktree)
 ```
-BOT_ROLE=manager template/scripts/add-example.sh tracker tracker "Tracker" <platform-id>
+BOT_ROLE=manager fleet/scripts/add-example.sh tracker tracker "Tracker" <platform-id>
 grep -rn '<' bots/tracker      # fill remaining placeholders
-template/scripts/validate.sh && template/scripts/sync.sh "add tracker from example"
-template/scripts/worktree.sh tracker
+fleet/scripts/validate.sh && fleet/scripts/sync.sh "add tracker from example"
+fleet/scripts/worktree.sh tracker
 ```
-`add-example.sh` fetches `examples/<example>` from the public template at your fleet's `template/VERSION` (override: `EXAMPLE_VERSION=0.5.1`), copies it to `bots/<slug>`, fills `<me>`, `<wt>`, the name and id, and adds a worker entry to `manager/fleet.json`. Then paste `instructions.md` into the bot's platform instructions and create its routines from `routines/*.json` (they ship `paused`).
+`add-example.sh` fetches `examples/<example>` from the public template at your fleet's `fleet/VERSION` (override: `EXAMPLE_VERSION=0.5.1`), copies it to `bots/<slug>`, fills `<me>`, `<wt>`, the name and id, and adds a worker entry to `local/fleet.json`. Then paste `instructions.md` into the bot's platform instructions and create its routines from `routines/*.json` (they ship `paused`).
 
 ## Contributing an example
 Start from a working bot, strip all personal data (names, emails, addresses, account/order/tracking numbers, private repo names, paths specific to you, confidential content, secrets), replace specifics with `<placeholders>`, keep `state.json` empty, and open a PR. `examples/` exists only in this template repo; it is never copied into fleets (add-example.sh fetches from here).
