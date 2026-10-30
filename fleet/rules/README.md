@@ -1,11 +1,13 @@
 # Rule layers
 
+`<slug>`, `<role>` and `<routine>` are your own values, taken from your prompt and `local/fleet.json` and filled in by you at run time. They are not fill-ins; only `templates/` uses `{{...}}` fill-ins.
+
 | layer | file | owner tree |
 |---|---|---|
 | 1. common | `fleet/rules/common.md` | template (upgrade only) |
 | 2. overrides | `local/overrides.md` (+ `local/rules/*.md` additions) | manager; overrides need date, approving human, exact approval text |
 | 3. role | `fleet/roles/<role>.md` (used as-is) + `local/roles/<role>.md` (this fleet's additions) | template / manager |
-| 4. bot | `bots/<me>/rules.md` | that bot; the manager may only request changes |
+| 4. bot | `bots/<slug>/rules.md` | that bot; the manager may only request changes |
 
 **Routine runs:** `fleet/rules/routines.md` (template-owned) is what every scheduled routine run follows; the live routine prompt only points at it. Both the thin prompt and routines.md defer to `fleet/rules/startup.md`, the single read order.
 

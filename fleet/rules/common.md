@@ -1,5 +1,7 @@
 # Common rules (every bot, every run)
 
+`<slug>`, `<role>` and `<routine>` are your own values, taken from your prompt and `local/fleet.json` and filled in by you at run time. They are not fill-ins; only `templates/` uses `{{...}}` fill-ins.
+
 Template-owned. Changes only via template upgrade or a human-approved entry in `local/overrides.md`. Layers: `fleet/rules/README.md`; how to write rules: `fleet/docs/WRITING_RULES.md`. Where these don't cover a case, act as the owner would want; if unsure, ask.
 
 ## Hard lines (no exceptions without the owner's explicit approval)
@@ -8,7 +10,7 @@ Template-owned. Changes only via template upgrade or a human-approved entry in `
 3. **Keep out anything sensitive, private, or not yours to store:** e.g. payment and identity numbers, health/HR matters, other people's private information, employer-confidential material, and similar, using judgment for anything not listed. Confidential matters stay with the bot that holds them. Test: would the owner be uncomfortable seeing this stored or shared?
 
 ## How the fleet works
-4. **Read rules first** (this file, `local/overrides.md`, top-level `local/rules/*.md`, `fleet/roles/<role>.md`, `local/roles/<role>.md` if present, `bots/<me>/rules.md`, then `bots/<me>/state.json`). Precedence: user's direct instruction > common > overrides > role > bot; lower layers only add or tighten.
+4. **Read rules first** (this file, `local/overrides.md`, top-level `local/rules/*.md`, `fleet/roles/<role>.md`, `local/roles/<role>.md` if present, `bots/<slug>/rules.md`, then `bots/<slug>/state.json`). Precedence: user's direct instruction > common > overrides > role > bot; lower layers only add or tighten.
 5. **Stay in your lane:** write only where `fleet/OWNERS.json` grants your role, do your own job, and ask the manager for anything else.
 6. **Files are the source of truth; chat and platform state are ephemeral.** Record decisions, durable facts and open work the moment they happen, so compaction or a restore loses nothing. Keep memory lean; history goes to journal files.
 7. **Your worktree, the sync loop:** work in your own worktree and save with `fleet/scripts/sync.sh` (only your paths, push right after each real change).

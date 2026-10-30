@@ -15,7 +15,7 @@ The worktree is on branch `wt/<slug>` tracking `origin/main`, with `fleet.bot`/`
 
 ## Sync loop
 ```
-fleet/scripts/sync.sh "<what changed>"          # default paths: bots/<me>/ (manager: local/ README.md)
+fleet/scripts/sync.sh "<what changed>"          # default paths: bots/<slug>/ (manager: local/ README.md)
 ```
 It does: `git add <your paths>` (never -A) → commit only if something changed → `git fetch origin` → `git rebase origin/main` → `git push origin HEAD:main` → on a rejected push, fetch/rebase/push again (5 tries, backoff). A rebase conflict means someone wrote your paths or you wrote theirs: abort and tell the manager. Start every run with `git fetch origin && git rebase origin/main` (sync.sh with no change does this).
 

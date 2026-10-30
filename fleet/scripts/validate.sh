@@ -9,6 +9,8 @@ cd "$(git rev-parse --show-toplevel)"
 MODE=fleet; [ "${1:-}" = "--pre-fleet" ] && MODE=pre-fleet
 err=0
 python3 fleet/scripts/owners.py audit || err=1
+# 0.10.2: shared rules/roles carry no {{...}} fill-ins (only templates/ does)
+! grep -rlnE '[{]{2}[A-Z_]+[}]{2}' fleet/rules fleet/roles 2>/dev/null | sed 's/^/FAIL fill-in placeholder in shared file: /' | grep . || err=1
 python3 - <<'PY' || err=1
 import json, glob, os, re, sys
 try: import jsonschema
