@@ -1,5 +1,9 @@
 # Changelog (template)
 
+## 0.10.3 – unreleased
+
+- **validate.sh:** a routine with `"private": true` no longer fails when its `stepsFile` is missing (private steps are git-ignored and exist only in their own bot's worktree), but its name must still match `routines/private-*.steps.md`. Warns when a `stepsFile` is not repo-relative (`bots/<slug>/routines/...`), e.g. a bare filename.
+
 ## 0.10.2 – 2026-10-30
 
 - **Rules:** each `fleet/rules/*.md` now opens with one line saying `<slug>`, `<role>` and `<routine>` are the bot's own run-time values (from its prompt and `local/fleet.json`), not fill-ins; only `templates/` uses `{{...}}` fill-ins. `<me>` becomes `<slug>` in `fleet/rules/README.md` and `fleet/docs/AGENT_GUIDE.md`.
