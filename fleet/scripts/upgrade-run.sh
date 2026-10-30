@@ -38,6 +38,7 @@ fleet/scripts/init-fleet.sh >/dev/null
 echo "$target" > fleet/VERSION
 python3 -c "import json;p='local/fleet.json';f=json.load(open(p));f['templateVersion']='$target';json.dump(f,open(p,'w'),indent=2,ensure_ascii=False);open(p,'a').write('\n')"
 chmod +x fleet/scripts/*.sh; fleet/scripts/install-hook.sh
+[ -x fleet/scripts/bot-json.sh ] && ls bots/*/bot.json >/dev/null 2>&1 && fleet/scripts/bot-json.sh --all --refresh || true   # 0.10.5+: kit_version in each bot.json
 [ -d manager ] || [ -d template ] && fleet/scripts/compat.sh install >/dev/null || true
 fleet/scripts/validate.sh || echo "WARNING: validation failed, review before pushing"
 git add -A

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Usage: fleet/scripts/render-prompt.sh <slug> [--stdout] [--worktree-base DIR]
-# Renders templates/THIN-PROMPT.tmpl for one bot from local/fleet.json (owner_name, bot name, role)
+# Renders templates/THIN-PROMPT.tmpl for one bot (0.10.5+: worktree + slug only; identity is read from bots/<slug>/bot.json at run time)
 # into bots/<slug>/THIN-PROMPT.md (instance file). Fails if owner_name is empty or any {{...}} is left unfilled.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -16,7 +16,10 @@ owner = (fl.get("owner_name") or "").strip()
 if not owner: sys.exit("render-prompt: set \"owner_name\" in local/fleet.json first (the owner's display name)")
 bot = next((b for b in fl["bots"] if b["slug"] == slug), None)
 if not bot: sys.exit(f"render-prompt: no bot '{slug}' in local/fleet.json")
-vals = {"BOT_NAME": bot["name"], "OWNER_NAME": owner, "SLUG": slug, "ROLE": bot["role"], "WORKTREE": f"{base}/{slug}"}
+bj_path = f"bots/{slug}/bot.json"
+if not os.path.exists(bj_path): sys.exit(f"render-prompt: missing {bj_path}; generate it with fleet/scripts/bot-json.sh {slug} (0.10.5+)")
+bj = json.load(open(bj_path))
+vals = {"BOT_NAME": bj["display_name"], "OWNER_NAME": bj["owner_name"], "SLUG": slug, "ROLE": bj["role"], "WORKTREE": bj["worktree"]}
 txt = open("templates/THIN-PROMPT.tmpl").read()
 txt = re.sub(r"\{\{(\w+)\}\}", lambda m: vals.get(m.group(1), m.group(0)), txt)
 left = re.findall(r"\{\{[^}]*\}\}", txt)

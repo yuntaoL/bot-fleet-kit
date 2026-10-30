@@ -22,7 +22,15 @@ case "$cmd" in
   expand)
     [ -d "bots/$old" ] || { echo "rename-bot: no bots/$old" >&2; exit 1; }
     [ ! -e "bots/$new" ] || { echo "rename-bot: bots/$new exists" >&2; exit 1; }
-    clean .; run cp -r "bots/$old" "bots/$new"; run git add "bots/$new"
+    clean .; run cp -r "bots/$old" "bots/$new"
+    # 0.10.5: the copy's bot.json gets the new slug and worktree path (display name, role etc. are untouched)
+    [ $dry = 1 ] || [ ! -f "bots/$new/bot.json" ] || python3 - "bots/$new/bot.json" "$old" "$new" <<'PYJ'
+import json, sys
+p, old, new = sys.argv[1:]; j = json.load(open(p)); j["slug"] = new
+w = j.get("worktree", ""); j["worktree"] = (w[: -len(old)] + new) if w.endswith("/" + old) else w
+json.dump(j, open(p, "w"), indent=2, ensure_ascii=False); open(p, "a").write("\n")
+PYJ
+    run git add "bots/$new"
     run git commit -qm "${BOT_NAME:-$(git config --get fleet.bot || echo builder)}: rename $old -> $new (expand: copy folder)"
     ;;
   worktree)

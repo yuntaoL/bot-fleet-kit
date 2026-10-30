@@ -17,7 +17,7 @@ python3 - <<'PY' || err=1
 import json, glob, os, re, sys
 try: import jsonschema
 except ImportError: sys.exit("validate: pip install jsonschema")
-S = {n: json.load(open(f"fleet/schema/{n}.schema.json")) for n in ["fleet","profile","state","routine","owners"]}
+S = {n: json.load(open(f"fleet/schema/{n}.schema.json")) for n in ["fleet","profile","state","routine","owners","bot"]}
 err = 0
 def chk(path, s):
     global err
@@ -31,7 +31,7 @@ F0="local/fleet.json"
 for e in ([] if os.path.exists(F0) else glob.glob("examples/*/")):  # examples validated only in the template repo
     chk(f"{e}profile.json","profile"); chk(f"{e}state.json","state")
     for r in glob.glob(f"{e}routines/*.json"): chk(r,"routine")
-for r in ["fleet/rules/common.md","fleet/rules/README.md","fleet/rules/startup.md","fleet/rules/routines.md","templates/THIN-PROMPT.tmpl","templates/ROUTINE-PROMPT.tmpl"]+[f"fleet/roles/{x}.md" for x in ["manager","builder","worker","retired"]]:
+for r in ["fleet/rules/common.md","fleet/rules/README.md","fleet/rules/startup.md","fleet/rules/routines.md","templates/THIN-PROMPT.tmpl","templates/ROUTINE-PROMPT.tmpl","templates/bot.json.tmpl"]+[f"fleet/roles/{x}.md" for x in ["manager","builder","worker","retired"]]:
     if not os.path.exists(r): err+=1; print(f"FAIL missing {r}")
 F="local/fleet.json"
 if os.path.exists(F):
@@ -52,6 +52,14 @@ if os.path.exists(F):
         if os.path.exists(f"{d}/state.json"): chk(f"{d}/state.json","state")
         for r in glob.glob(f"{d}/routines/*.json"): chk(r,"routine")
         if b["role"]!="retired" and not os.path.exists(f"{d}/rules.md"): err+=1; print(f"FAIL missing {d}/rules.md")
+        # 0.10.5: bots/<slug>/bot.json exists, matches its schema and its own slug
+        bjp=f"{d}/bot.json"
+        if not os.path.exists(bjp): err+=1; print(f"FAIL missing {bjp} (fleet/scripts/bot-json.sh {b['slug']})")
+        else:
+            chk(bjp,"bot")
+            try: bj=json.load(open(bjp))
+            except Exception: bj={}
+            if bj.get("slug") not in (None,b["slug"]): err+=1; print(f"FAIL {bjp}: slug '{bj.get('slug')}' != folder '{b['slug']}'")
 sys.exit(1 if err else 0)
 PY
 # 0.7.0 knowledge-layout checks: WARN only, never fail
@@ -144,6 +152,31 @@ if os.path.isdir("manager") or os.path.isdir("template"):
 if w: print(f"validate: {w} bootstrap warning(s) (not failures)")
 sys.exit(1 if e else 0)
 PY
+# 0.10.5 bot.json is the single copy of identity: WARN on hard-coded copies and registry drift (never fails)
+python3 - <<'PY2' || true
+import json, glob, os, re
+F="local/fleet.json"; w=0
+if os.path.exists(F):
+    fl=json.load(open(F)); reg={b["slug"]:b for b in fl.get("bots",[])}
+    ids=[]
+    for p in sorted(glob.glob("bots/*/bot.json")):
+        try: bj=json.load(open(p))
+        except Exception: continue
+        s=bj.get("slug",""); ids.append(bj)
+        b=reg.get(s)
+        if b and b.get("name")!=bj.get("display_name"): w+=1; print(f"WARN {p}: display_name '{bj.get('display_name')}' != local/fleet.json name '{b.get('name')}' (manager: bot-json.sh --mirror {s})")
+        if b and b.get("role")!=bj.get("role"): w+=1; print(f"WARN {p}: role '{bj.get('role')}' != local/fleet.json role '{b.get('role')}' (fleet.json is authoritative for role)")
+    files=glob.glob("templates/*.tmpl")+glob.glob("bots/*/THIN-PROMPT.md")+glob.glob("bots/*/routines/*.json")+glob.glob("bots/*/routines/*.prompt.md")+glob.glob("bots/*/rules.md")+glob.glob("local/rules/*.md")+glob.glob("fleet/rules/*.md")
+    for bj in ids:
+        name=bj.get("display_name",""); role=bj.get("role",""); s=bj.get("slug","")
+        rx_role=re.compile(r"(?i)(your role is|role:?)\s*`?"+re.escape(role)+r"\b") if role else None
+        for f in files:
+            try: t=open(f).read()
+            except Exception: continue
+            if len(name)>=3 and name in t: w+=1; print(f"WARN {f}: hard-codes display name '{name}' (from bots/{s}/bot.json); reference bot.json instead")
+            if rx_role and f.startswith(("templates/",f"bots/{s}/THIN-PROMPT",f"bots/{s}/routines/")) and rx_role.search(t): w+=1; print(f"WARN {f}: hard-codes role '{role}' (from bots/{s}/bot.json); reference bot.json instead")
+if w: print(f"validate: {w} bot.json warning(s) (not failures)")
+PY2
 # 0.10.5 journal gaps (warn only): activity today with no journal line after it
 bash fleet/scripts/check-journal.sh 2>/dev/null | grep "^WARN" || true
 [ $err = 0 ] && echo "validate: OK ($MODE)" || { echo "validate: FAILED"; exit 1; }

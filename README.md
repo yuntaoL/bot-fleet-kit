@@ -80,7 +80,7 @@ The git side of both phases is tested end to end by `fleet/scripts/selftest.sh` 
 1. **Use this template** → create a **private** repo, clone it on the machine your bots share, set your git identity.
 2. `fleet/scripts/bootstrap.sh https://github.com/yuntaoL/bot-fleet-kit.git && git push`
 3. Set `owner_name` and add bots to `local/fleet.json`, seed `bots/<slug>/` (or `add-example.sh`), run `fleet/scripts/worktree.sh --all`.
-4. `fleet/scripts/render-prompt.sh <slug>` and put `bots/<slug>/THIN-PROMPT.md` at the top of each bot's instructions.
+4. `fleet/scripts/bot-json.sh <slug>` (identity file) and `fleet/scripts/render-prompt.sh <slug>`, and put `bots/<slug>/THIN-PROMPT.md` at the top of each bot's instructions.
 5. `fleet/scripts/validate.sh` → green. Full guide: [ADOPTION.md](fleet/docs/ADOPTION.md).
 
 ## How it works
