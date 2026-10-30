@@ -5,6 +5,7 @@ Rename support and a thin-prompt read fix. Additive; no migration.
 - **Skill:** `template/defaults/fleet/skills/rename-bot/SKILL.md` (builder-owned): display name, slug/folder, worktree + branch as expand-then-contract steps (snapshot, clean-worktree check, reference grep without history, fleet.json/registry, copy then remove folder, worktree move + `branch -m` + prune, re-render, outside-git checklist for the bot itself: profile, routine prompts, skills, notes; validate, fleet-wide pull, verify, rollback). `builder.md` points to it.
 - **Script:** `template/scripts/rename-bot.sh <old> <new> <refs|expand|worktree|contract> [--dry-run]` does the git parts.
 - **validate.sh:** WARN (FAIL with `--pre-fleet`) when a worktree dir differs from its `fleet.bot`, WARN on branch != `wt/<fleet.bot>` or a `fleet.bot` not in fleet.json. Previously a dir named differently from its slug was skipped silently.
+- **Rename drift:** `template/scripts/check-names.sh [profiles-dir]` (read-only, exit 3 on drift) compares live display names with fleet.json and the registry; `audit.sh` runs it; AUDIT.md item 8 and the skill: change nothing, builder tells the manager old and new names, manager asks the owner (full rename or display name only).
 - **Schema:** optional `previousSlugs` per bot in fleet.json.
 - **Thin prompt:** step 2 also reads `bots/{{SLUG}}/instructions.md` if it exists. Re-render to pick it up.
 - **selftest.sh:** rename end to end (dry-run no-op, expand, worktree move, validate clean, contract) and a negative check for a mismatched worktree dir.

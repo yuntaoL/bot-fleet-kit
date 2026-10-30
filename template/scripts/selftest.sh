@@ -86,5 +86,12 @@ ok "rename pip -> wren (dry-run no-op, registry, expand, worktree+branch move, r
 # negative: worktree dir != fleet.bot warns (used to be skipped silently)
 (cd "$A" && git worktree move "$W" "$BOT_FLEET_WORKTREES/wren-old" && { out="$(template/scripts/validate.sh 2>&1)"; grep -q "WARN worktree dir .*wren-old != fleet.bot 'wren'" <<<"$out"; } \
   && git worktree move "$BOT_FLEET_WORKTREES/wren-old" "$W") || die "worktree dir mismatch check"
+# rename drift (owner renamed a bot in the app): read-only DRIFT, nothing changed
+PR="$T/profiles"; for b in atlas:Atlas forge:Forge wren:Wren; do mkdir -p "$PR/fake-${b%%:*}"; echo "{\"name\":\"${b#*:}\"}" > "$PR/fake-${b%%:*}/profile.json"; done
+(cd "$A" && template/scripts/check-names.sh "$PR" >/dev/null) || die "check-names clean"
+echo '{"name":"Robin"}' > "$PR/fake-wren/profile.json"
+(cd "$A" && h="$(git rev-parse HEAD)"; r=0; out="$(template/scripts/check-names.sh "$PR")" || r=$?; [ $r = 3 ] && grep -q "DRIFT wren: fleet.json name 'Wren' != live name 'Robin'" <<<"$out" \
+  && [ "$(git rev-parse HEAD)" = "$h" ] && [ -z "$(git status --porcelain)" ]) || die "check-names drift"
+ok "rename drift: check-names clean, then DRIFT (exit 3) with old+new names, repo unchanged"
 ok "negative checks (no active builder warns/fails strict; leftover {{...}} fails; role drift warns/fails strict; cross-bot write blocked; worktree dir mismatch warns)"
 echo "selftest: ALL PASS ($T)"
