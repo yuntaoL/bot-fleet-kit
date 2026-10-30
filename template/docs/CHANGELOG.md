@@ -1,5 +1,13 @@
 # Changelog (template)
 
+## 0.7.0 – 2026-10-29
+Additive release: new files and warn-only checks; nothing removed or renamed; no behavior change for existing bots.
+- **Fleet changes:** `CONTRIBUTING.md` gains "Fleet changes: classify first, then deploy safely" (Template vs Instance; expand-then-contract; prompt support before content moves; canary; snapshot before every change; one step at a time; additive template releases). Default skill `template/defaults/fleet/skills/fleet-change/SKILL.md`.
+- **Safety net:** `template/scripts/snapshot-fleet.sh [label]` (always a new `<YYYY-MM-DD-HHMM>[-label]` folder outside git, sha256 manifest, refuses to overwrite); `template/docs/RESTORE-BOT.md` runbook template.
+- **Confidential scan:** `template/scripts/confidential-scan.sh` (patterns outside git, prints paths only). `install-hook.sh` now runs the scanner (instance copy in `manager/shared/scripts/` preferred) before `check-boundary.sh`, so rerunning it no longer drops a scanner hook. No pattern file = scanner skips.
+- **Knowledge layout (opt-in, nothing reads it yet):** `template/docs/KB-LAYOUT.md`; defaults for `manager/registry/INDEX.md` + bot card `CARD.md`, `manager/shared/INDEX.md`, `bots/<slug>/kb/INDEX.md`. `init-fleet.sh` creates the two manager INDEX files only if missing. `validate.sh` adds warn-only INDEX link and kb front-matter checks.
+- No migration. Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.7.0`.
+
 ## 0.6.2 – 2026-10-21
 - examples/tracker: optional **start time**. Requests may carry `startAt` (time) and/or `startWhen` (status trigger); full checks begin at whichever comes first, with light cached checks before that (not counted toward maxChecks). Deliveries and exceptions are always reported. Added to rules.md and the live-package-tracking skill, written as principles.
 - sync.sh: with no paths, the manager now also commits its own `bots/<me>/` folder (previously only `manager/` and README.md).
