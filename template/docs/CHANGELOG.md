@@ -1,7 +1,7 @@
 # Changelog (template)
 
 ## Unreleased (0.9.3)
-- **Example:** `examples/tracker/routines/tracker-loop.json` moves its legacy `prompt` into `steps` (same instructions, split into steps; the rules-read preamble is dropped because the thin routine prompt does it). No behaviour change.
+- **Examples:** bundled example routines move their legacy `prompt` into `steps` (same instructions, split into steps): `examples/tracker/routines/tracker-loop.json` (rules-read preamble dropped; the thin routine prompt does it), `examples/notes-keeper/routines/daily-inbox-filing.json` and `weekly-vault-cleanup.json` (wording unchanged). No behaviour change.
 
 ## 0.9.2 – 2026-10-29
 Thin routine prompts. Additive; legacy routines keep working.
