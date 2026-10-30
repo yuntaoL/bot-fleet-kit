@@ -5,14 +5,13 @@
   "status": "paused",
   "enabledWhen": "future.json non-empty (the bot pauses it when future.json is empty and resumes it when a request with a future startAt arrives)",
   "steps": [
-    "Work only in <wt> for fleet files; the thin routine prompt has already loaded the rules and bots/<me>/state.json.",
+    "Work only in <wt> for fleet files; template/rules/routines.md has already loaded the rules and bots/<me>/state.json.",
     "Pull <queue-clone> (your private queue repo <queue-repo>) and read future.json (a JSON array; every entry has startAt in <timezone>).",
     "For each request whose startAt has passed, move it unchanged into queue.json and remove it from future.json.",
     "If anything moved, resume tracker-loop if it is paused.",
     "Do not check carriers or any other source; this routine only promotes due requests.",
     "Commit and push the queue repo only if a file changed; put the moved ids in the commit message.",
     "If future.json is empty, pause this routine.",
-    "Stay silent. Never message the user directly.",
-    "Journal every run, skips included, as the thin routine prompt says; the line's read: field must include `routine:tracker-future.json`."
+    "Stay silent. Never message the user directly."
   ]
 }

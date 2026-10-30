@@ -2,7 +2,7 @@
 # Usage: template/scripts/check-routines.sh [agent-data-dir]     Read-only (0.9.2+). Thin-routine drift check.
 # For each non-retired bot, compares every live routine prompt it can read
 # (<agent-data-dir>/<id>/automations/*.json with "name" and "prompt"; default AGENT_DATA or /home/box/agent-data/agents)
-# with the rendered thin prompt from render-routine-prompt.sh. Also flags routine files with only a legacy `prompt`.
+# with the rendered thin prompt from render-routine-prompt.sh (0.9.4+: the minimal prompt pointing at template/rules/routines.md). Also flags routine files with only a legacy `prompt`.
 # Unreadable live data is skipped, not failed. Prints WARN lines; exit 0 always (audit input, not a gate).
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"

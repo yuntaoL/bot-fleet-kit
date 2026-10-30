@@ -10,7 +10,6 @@
     "Compliance pass on the bot-owned folder (<bot-folder>): read its README.md first (never edit it). Fix frontmatter, placement, broken wikilinks and indexes; split files over ~300 lines / 25 KB into a folder with an index.md; merge exact duplicates keeping both sources; remove any secrets, medical/HR info or full account numbers and log each removal. Never change what a fact means; mark other agents' facts superseded instead of deleting. Log every fix in its CHANGELOG.md. If a rule is unclear or an agent keeps breaking one, message the manager (<manager-id>) instead of guessing.",
     "Update the index pages and log everything else in Meta/Changelog.md (one row per write). Touch Meta/.last-run and check the sync log for errors.",
     "Fleet reconcile (short): in <wt> (read the fleet rules first), compare my live routines, memory and profile with bots/<me>/ (routines/*.json, memory.md, profile.json, state.json) and fix drift in both directions, with no secrets or confidential content. Save with template/scripts/sync.sh \"reconcile\" only if something changed. Tell the user only if a conflict needs them.",
-    "Never delete user notes, never touch _raw/, and don't merge, rewrite heavily or restructure the user's notes without asking; put proposals in a note. If nothing changed, stay quiet. Otherwise send the user a short summary.",
-    "Journal every run, skips included, as the thin routine prompt says; the line's read: field must include `routine:daily-inbox-filing.json`."
+    "Never delete user notes, never touch _raw/, and don't merge, rewrite heavily or restructure the user's notes without asking; put proposals in a note. If nothing changed, stay quiet. Otherwise send the user a short summary."
   ]
 }
