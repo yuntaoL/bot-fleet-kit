@@ -141,4 +141,10 @@ cd "$A"; ok "0.10.2 pull.sh, concurrent sync.sh, private-*.steps.md ignored and 
   && printf '{"name":"private-q","schedule":"daily","private":true,"stepsFile":"bots/atlas/routines/q.steps.md"}\n' > $R/private-p.json && ! fleet/scripts/validate.sh >/dev/null 2>&1 \
   && rm $R/private-p.json && touch bare.steps.md && printf '{"name":"b","schedule":"daily","stepsFile":"bare.steps.md"}\n' > $R/b.json && out="$(fleet/scripts/validate.sh 2>&1)" && grep -q "WARN .*b.json: stepsFile 'bare.steps.md' is not repo-relative" <<<"$out"; r=$?; rm -f $R/private-p.json $R/b.json bare.steps.md; exit $r) || die "private stepsFile / repo-relative"
 ok "0.10.3 private routine missing stepsFile ok, private name enforced, non-repo-relative stepsFile warns"
+# 0.10.5: journal-gap check (per-turn journal rule)
+(cd "$A" && B=bots/atlas && D="$(date +%F)" && mkdir -p $B/kb $B/journal && echo gap > $B/kb/gap-test.md && git add $B && BOT_ROLE=manager git commit -qm "atlas: gap test work" --no-verify \
+  && c="$(fleet/scripts/check-journal.sh)" && grep -q "^WARN atlas: activity" <<<"$c" && ! fleet/scripts/check-journal.sh --strict >/dev/null && v="$(fleet/scripts/validate.sh 2>&1)" && grep -q "^WARN atlas: activity" <<<"$v" \
+  && sleep 61 && printf -- '- %s gap test journaled\n' "$(date +%H:%M)" >> $B/journal/$D.md && git add $B && BOT_ROLE=manager git commit -qm "atlas: journal" --no-verify \
+  && c="$(fleet/scripts/check-journal.sh)" && ! grep -q "^WARN atlas" <<<"$c" && grep -q "A run is every chat turn" fleet/rules/startup.md && grep -q "After a context summary" fleet/rules/startup.md && grep -q "Delegation carries the duty" fleet/rules/startup.md && grep -q "Every chat turn is a run" templates/THIN-PROMPT.tmpl; r=$?; h0="$(git log --format=%H --grep="^atlas: gap test work" -1)"; [ -n "$h0" ] && git reset -q --hard "$h0~1"; exit $r) || die "journal-gap check"
+ok "0.10.5 check-journal flags unjournaled activity, clears after a journal line; per-turn, re-read and delegation rules present"
 echo "selftest: ALL PASS ($T)"

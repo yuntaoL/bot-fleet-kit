@@ -1,5 +1,13 @@
 # Changelog (template)
 
+## 0.10.5 – 2026-10-30
+
+**Per-turn journaling (fixes interactive work going unrecorded).** Routine runs journaled reliably; chat work did not, because "run" was never defined for a chat session, so "before ending" never fired.
+- **Rules:** `fleet/rules/startup.md` defines a run as every chat turn, routine run, or bot message handled. New step 0: after a context summary, re-read startup.md, `bots/<slug>/kb/INDEX.md` and today's journal before acting. Step 5 now fires before ending *every turn* with work or a decision: journal line + sync. New step 6: every delegated brief (subagent, helper, other bot) ends with the record-and-sync duty, or the parent records the result on return. Old step 6 (fail safe) is step 7. `common.md` #14 uses the same per-turn wording.
+- **New `fleet/scripts/check-journal.sh [YYYY-MM-DD] [--strict]`** (read-only): flags each active bot whose own activity that day (its own `<slug>: ` commits outside its journal, plus optional platform transcripts under `$BOT_FLEET_TRANSCRIPTS/<slug>/`) is newer than its last journal line. `validate.sh` prints its warnings (never fails); `audit.sh` runs it for today and yesterday. Selftest covers it.
+- **THIN-PROMPT.tmpl:** one new line: "Every chat turn is a run: before ending any turn where you did work or made a decision, append a journal line and save with `fleet/scripts/sync.sh`. After a context summary, re-read startup.md before acting."
+- Upgrade: from 0.10.4, `BOT_ROLE=manager fleet/scripts/upgrade.sh 0.10.5 --dry-run`, then without `--dry-run`. No migration. Rules take effect on each bot's next run (startup.md is read every run). Prompt change (optional, belt and braces): re-render with `render-prompt.sh <slug>` and re-paste one bot at a time with the owner's yes; old prompts keep working. Suggested: add a daily manager routine that runs `check-journal.sh` and reports gaps.
+
 ## 0.10.4 – 2026-10-30
 
 - **Renamed:** the public repo is now `yuntaoL/bot-fleet-kit` (was `bot-fleet-template`; GitHub redirects the old URL). Docs, README, LICENSE and script defaults use the new name; prose calls the whole repo the "kit". The `templates/` folder keeps its name.

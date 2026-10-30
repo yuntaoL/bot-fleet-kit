@@ -6,6 +6,7 @@ AGE="${1:-7}"
 echo "# Fleet audit $(date '+%Y-%m-%d %H:%M %Z')"
 echo; echo "## validate"; fleet/scripts/validate.sh 2>&1 | tail -20
 echo; echo "## display names (rename drift; read-only)"; fleet/scripts/check-names.sh 2>&1 | tail -20
+echo; echo "## journal gaps (per-turn rule; today and yesterday)"; fleet/scripts/check-journal.sh; fleet/scripts/check-journal.sh "$(date -d yesterday +%F 2>/dev/null || date -v-1d +%F)"
 echo; echo "## routine prompts (thin-routine drift; read-only)"; fleet/scripts/check-routines.sh 2>&1 | tail -30
 AGE="$AGE" python3 - <<'PY'
 import json, os, re, glob, subprocess, datetime as dt

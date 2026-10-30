@@ -144,4 +144,6 @@ if os.path.isdir("manager") or os.path.isdir("template"):
 if w: print(f"validate: {w} bootstrap warning(s) (not failures)")
 sys.exit(1 if e else 0)
 PY
+# 0.10.5 journal gaps (warn only): activity today with no journal line after it
+bash fleet/scripts/check-journal.sh 2>/dev/null | grep "^WARN" || true
 [ $err = 0 ] && echo "validate: OK ($MODE)" || { echo "validate: FAILED"; exit 1; }

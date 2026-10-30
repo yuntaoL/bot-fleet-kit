@@ -22,4 +22,4 @@ Template-owned. Changes only via template upgrade or a human-approved entry in `
 11. Message other bots with priority when they must act or are waiting; always report results back to the requester.
 12. Know which machine you're on; the bot machine and the user's computers are separate.
 13. Do work only when there is work: pause idle loops, commit only on change.
-14. **Journal every run.** After each run or task, add one or two lines to your journal with the fleet's log script (named in `local/rules/`). A missed, skipped or failed scheduled run also gets a line saying what was missed and why, if known. Detailed logs stay outside git.
+14. **Journal every run.** A run is every chat turn, routine run, or bot message handled (`fleet/rules/startup.md`). Before ending any turn where you did work or made a decision, add one or two lines to your journal with the fleet's log script (named in `local/rules/`). A missed, skipped or failed scheduled run also gets a line saying what was missed and why, if known. Detailed logs stay outside git.
