@@ -8,6 +8,7 @@ Role-files realign. Keeps fleets in sync with template role files so upgrades ne
 - **upgrade.sh:** role files equal to the current or target default are copied automatically; an edited one stops the upgrade with a diff before anything changes (`BOT_FLEET_KEEP_ROLES=1` keeps it and continues).
 - **validate.sh:** WARN `role drift` when `manager/roles/<role>.md` differs from the template default (FAIL under `BOT_FLEET_STRICT_ROLES=1`).
 - **selftest.sh:** fails on bare `docs/` paths in role defaults; negative check for role drift.
+- **Review fixes:** role defaults drop the bootstrap-phase lines (bootstrap docs are read by the owner/manager before the repo exists, not from role files); builder keeps "only builders create bots", manager keeps the one-manager/one-builder invariant and is named the only bot that proposes template improvements. Thin prompt fail-safe reports through one channel: the manager, or the owner only if the bot is the manager or the manager is unreachable.
 - **CONTRIBUTING.md:** "Role files are template-owned copies". Log scripts stay instance; fleets name theirs in `manager/local/`.
 - No migration. Upgrade: move local role edits to `manager/local/roles/<role>.md` and reset `manager/roles/` first (or `BOT_FLEET_KEEP_ROLES=1`), then `BOT_ROLE=manager template/scripts/upgrade.sh 0.9.0`; optionally re-render prompts.
 
