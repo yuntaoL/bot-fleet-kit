@@ -26,7 +26,8 @@ Top of each bot's platform instructions; text in `template/defaults/bot/instruct
 1. Add it to `manager/fleet.json` (slug `^[a-z0-9-]+$`, role); `cp -r template/defaults/bot bots/<slug>` and fill in `profile.json`, `instructions.md` (prompt on top), `rules.md`; remove `routines/example.json`.
 2. Commit from the manager worktree (manager may add files under bots/<slug>/); `template/scripts/worktree.sh <slug>`.
 3. Render its prompt: `template/scripts/render-prompt.sh <slug>` (needs `owner_name` in `manager/fleet.json`, 0.8.0+); give the bot `bots/<slug>/THIN-PROMPT.md` as its platform prompt.
-4. After that, only the bot edits its folder. In a live fleet (0.8.0+) the builder adds bots; the manager decides.
+4. Routines (0.9.2+): put each routine's real instructions in `bots/<slug>/routines/<name>.json` `steps` (or a `stepsFile`), run `template/scripts/render-routine-prompt.sh <slug>`, and use `routines/<name>.prompt.md` as the live routine prompt. A routine's saved prompt never holds task knowledge.
+5. After that, only the bot edits its folder. In a live fleet (0.8.0+) the builder adds bots; the manager decides.
 
 From an example: `BOT_ROLE=manager template/scripts/add-example.sh <example> <slug> [name] [platform-id]` does step 1, fetching the example from the public template at your template/VERSION (see examples/README.md in the template repo).
 

@@ -1,6 +1,6 @@
 {
     "name": "example",
-    "prompt": "...",
+    "steps": ["..."],
     "schedule": "0 9 * * 1-5",
     "timezone": "UTC",
     "status": "paused"
