@@ -45,4 +45,18 @@ if os.path.exists(F):
         if b["role"]!="retired" and not os.path.exists(f"{d}/rules.md"): err+=1; print(f"FAIL missing {d}/rules.md")
 sys.exit(1 if err else 0)
 PY
+# 0.7.0 knowledge-layout checks: WARN only, never fail
+python3 - <<'PY' || true
+import glob, os, re
+w=0
+for idx in ["manager/shared/INDEX.md","manager/registry/INDEX.md"]+glob.glob("bots/*/kb/INDEX.md")+glob.glob("bots/*/skills/INDEX.md"):
+    if not os.path.exists(idx): continue
+    base=os.path.dirname(idx)
+    for m in re.finditer(r"(?m)^\|\s*`?([A-Za-z0-9_./-]+\.(?:md|json|sh))`?\s*\|", open(idx).read()):
+        p=m.group(1)
+        if not (os.path.exists(os.path.join(base,p)) or os.path.exists(p)): w+=1; print(f"WARN {idx}: row points to missing {p}")
+for f in glob.glob("bots/*/kb/**/*.md", recursive=True):
+    if not open(f).read(4).startswith("---"): w+=1; print(f"WARN {f}: no front matter")
+if w: print(f"validate: {w} layout warning(s) (not failures)")
+PY
 [ $err = 0 ] && echo "validate: OK" || { echo "validate: FAILED"; exit 1; }
