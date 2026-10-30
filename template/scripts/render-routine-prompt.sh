@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Usage: template/scripts/render-routine-prompt.sh <slug> [<routine>|--all] [--stdout] [--worktree-base DIR]
-# Renders template/defaults/ROUTINE-PROMPT.tmpl (0.9.2+) for one routine (default --all: every bots/<slug>/routines/*.json)
+# Renders template/defaults/ROUTINE-PROMPT.tmpl (0.9.2+; 0.9.4+ a minimal prompt that defers to template/rules/routines.md) for one routine (default --all: every bots/<slug>/routines/*.json)
 # into bots/<slug>/routines/<routine>.prompt.md (instance file; paste it as the live routine prompt).
 # Fails if owner_name is empty, the routine file is missing, or any {{...}} is left unfilled.
 set -euo pipefail

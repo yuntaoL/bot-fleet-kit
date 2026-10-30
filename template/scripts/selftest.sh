@@ -97,7 +97,7 @@ ok "rename drift: check-names clean, then DRIFT (exit 3) with old+new names, rep
 (cd "$A" && git pull -q --ff-only && mkdir -p bots/atlas/routines && printf '{"name":"daily-check","schedule":"0 9 * * *","steps":["Check the inbox.","Journal the result."]}\n' > bots/atlas/routines/daily-check.json \
   && printf '{"name":"old-one","schedule":"0 8 * * *","prompt":"do everything"}\n' > bots/atlas/routines/old-one.json \
   && template/scripts/render-routine-prompt.sh atlas >/dev/null && P2=bots/atlas/routines/daily-check.prompt.md \
-  && grep -q "You are Atlas, one bot in Alex Test's fleet, running routine \`daily-check\`" $P2 && grep -q "bots/atlas/routines/daily-check.json" $P2 && ! grep -q '{{' $P2 \
+  && grep -q "You are Atlas (slug \`atlas\`)" $P2 && grep -q "template/rules/routines.md" $P2 && grep -q "routine \`daily-check\`" $P2 && grep -q "Alex Test" $P2 && ! grep -q '{{' $P2 \
   && template/scripts/validate.sh >/dev/null) || die "render-routine-prompt / schema"
 (cd "$A" && out="$(template/scripts/check-routines.sh "$T/none")" && grep -q "WARN bots/atlas/routines/old-one.json: legacy fat prompt" <<<"$out") || die "check-routines legacy"
 LA="$T/ag/fake-atlas/automations"; mkdir -p "$LA"

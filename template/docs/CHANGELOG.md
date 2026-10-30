@@ -1,5 +1,13 @@
 # Changelog (template)
 
+## Unreleased (0.9.4)
+- **Rules:** new `template/rules/routines.md` (template-owned) holds everything a routine run does: pull, read the rules in thin-prompt order, follow `bots/<slug>/routines/<name>.json` `steps`/`stepsFile` (legacy `prompt` fallback), journal every run including skips with a `read:` field that must include the marker `routine:<stepsFile name>` or `routine:<name>.json`, save with `sync.sh`, stay quiet when nothing changed unless the steps say otherwise, never change the routine's own schedule unless the steps say so, fail safe.
+- **Template:** `ROUTINE-PROMPT.tmpl` shrinks to a two-line prompt: pull, read `template/rules/routines.md` and follow it for routine `{{ROUTINE}}`, plus the fail-safe line. A run line without the marker did not use it.
+- **Examples:** tracker (`tracker-loop`, `tracker-future`) and notes-keeper routines keep only task steps; generic journal/marker text lives in routines.md.
+- **Scripts:** `render-routine-prompt.sh` and `check-routines.sh` unchanged in behaviour (comments only); selftest checks the new prompt text.
+- **Docs:** AGENT_GUIDE (adding a bot), AUDIT.md item 9 (marker as proof of use), rules/README (routines.md).
+- Upgrade: `BOT_ROLE=manager template/scripts/upgrade.sh 0.9.4`, then re-render each bot's routine prompts with `render-routine-prompt.sh <slug> --all`. Live routine prompts stay unchanged until each bot pastes its rendered prompt in (owner's yes); until then `check-routines.sh` reports them as not the rendered thin prompt.
+
 ## 0.9.3 – 2026-10-29
 - **Example (tracker):** adds the future list: `examples/tracker/routines/tracker-future.json` (steps format; hourly within check hours, promotes requests whose `startAt` has passed from `future.json` into `queue.json`, resumes `tracker-loop`, pauses itself when empty), plus a Future section in rules.md and notes in README.md and instructions.md.
 - **Examples:** bundled example routines move their legacy `prompt` into `steps` (same instructions, split into steps): `examples/tracker/routines/tracker-loop.json` (rules-read preamble dropped; the thin routine prompt does it), `examples/notes-keeper/routines/daily-inbox-filing.json` and `weekly-vault-cleanup.json` (wording unchanged). No behaviour change.
