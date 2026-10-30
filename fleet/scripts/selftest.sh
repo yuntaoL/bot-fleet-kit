@@ -136,4 +136,9 @@ for s in atlas forge; do (cd "$BOT_FLEET_WORKTREES/$s" && fleet/scripts/pull.sh 
 (cd "$A" && mkdir -p bots/atlas/routines && cp templates/bot/.gitignore bots/atlas/.gitignore && echo secret > bots/atlas/routines/private-x.steps.md && git add bots/atlas && git status --porcelain | grep -q private-x && exit 1
   git add -f bots/atlas/routines/private-x.steps.md && ! fleet/scripts/validate.sh >/dev/null 2>&1 && ! fleet/scripts/confidential-scan.sh --all >/dev/null 2>&1; r=$?; git reset -q; rm -f bots/atlas/routines/private-x.steps.md bots/atlas/.gitignore; exit $r) || die "private steps guard"
 cd "$A"; ok "0.10.2 pull.sh, concurrent sync.sh, private-*.steps.md ignored and guarded"
+# 0.10.3: private routine with missing (ignored) stepsFile passes; bad private name fails; non-repo-relative stepsFile warns
+(cd "$A" && R=bots/atlas/routines && mkdir -p $R && printf '{"name":"private-p","schedule":"daily","private":true,"stepsFile":"bots/atlas/routines/private-p.steps.md"}\n' > $R/private-p.json && fleet/scripts/validate.sh >/dev/null 2>&1 \
+  && printf '{"name":"private-q","schedule":"daily","private":true,"stepsFile":"bots/atlas/routines/q.steps.md"}\n' > $R/private-p.json && ! fleet/scripts/validate.sh >/dev/null 2>&1 \
+  && rm $R/private-p.json && touch bare.steps.md && printf '{"name":"b","schedule":"daily","stepsFile":"bare.steps.md"}\n' > $R/b.json && out="$(fleet/scripts/validate.sh 2>&1)" && grep -q "WARN .*b.json: stepsFile 'bare.steps.md' is not repo-relative" <<<"$out"; r=$?; rm -f $R/private-p.json $R/b.json bare.steps.md; exit $r) || die "private stepsFile / repo-relative"
+ok "0.10.3 private routine missing stepsFile ok, private name enforced, non-repo-relative stepsFile warns"
 echo "selftest: ALL PASS ($T)"

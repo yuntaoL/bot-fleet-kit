@@ -123,7 +123,13 @@ for b in bots:
         try: r=json.load(open(f))
         except Exception: continue
         sf=r.get("stepsFile")
-        if sf and not os.path.exists(sf): fail(f"{f}: stepsFile '{sf}' not found")
+        if not sf: continue
+        pre=f"bots/{b['slug']}/routines/"
+        if not sf.startswith(pre): warn(f"{f}: stepsFile '{sf}' is not repo-relative (expected {pre}<name>.steps.md)")
+        if r.get("private") is True:
+            # 0.10.3: private steps are git-ignored and live only in their own bot's worktree
+            if not re.fullmatch(r"(bots/[^/]+/routines/)?private-[^/]+\.steps\.md", sf): fail(f"{f}: private routine stepsFile '{sf}' must be routines/private-*.steps.md")
+        elif not os.path.exists(sf): fail(f"{f}: stepsFile '{sf}' not found")
     for p in _g.glob(f"bots/{b['slug']}/routines/*.prompt.md"):
         if re.search(r"\{\{[^}]*\}\}", open(p).read()): fail(f"{p}: unfilled {{...}} placeholder (re-run render-routine-prompt.sh)")
 # 0.10.0 layout: role files are read from fleet/roles/ (no per-instance copies); compat links for old paths
