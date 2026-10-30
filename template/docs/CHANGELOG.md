@@ -1,6 +1,6 @@
 # Changelog (template)
 
-## Unreleased (0.9.4)
+## 0.9.4 – 2026-10-30
 - **Rules:** new `template/rules/routines.md` (template-owned) holds everything a routine run does: pull, read the rules in thin-prompt order, follow `bots/<slug>/routines/<name>.json` `steps`/`stepsFile` (legacy `prompt` fallback), journal every run including skips with a `read:` field that must include the marker `routine:<stepsFile name>` or `routine:<name>.json`, save with `sync.sh`, stay quiet when nothing changed unless the steps say otherwise, never change the routine's own schedule unless the steps say so, fail safe.
 - **Template:** `ROUTINE-PROMPT.tmpl` shrinks to a two-line prompt: pull, read `template/rules/routines.md` and follow it for routine `{{ROUTINE}}`, plus the fail-safe line. A run line without the marker did not use it.
 - **Examples:** tracker (`tracker-loop`, `tracker-future`) and notes-keeper routines keep only task steps; generic journal/marker text lives in routines.md.
