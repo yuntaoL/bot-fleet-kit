@@ -1,0 +1,3 @@
+# expect: full
+# case: typechange-journal
+T	bots/dr-eggbot/journal/2026-11-06.md

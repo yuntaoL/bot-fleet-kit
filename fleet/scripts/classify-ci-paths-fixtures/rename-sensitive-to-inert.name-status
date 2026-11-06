@@ -1,0 +1,3 @@
+# expect: full
+# case: rename-sensitive-to-inert
+R080	bots/dr-eggbot/rules.md	bots/dr-eggbot/kb/moved.md

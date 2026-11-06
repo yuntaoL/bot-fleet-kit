@@ -1,0 +1,3 @@
+# expect: docs-only
+# case: rename-inert-to-inert
+R100	bots/dr-eggbot/journal/2026-11-05.md	bots/dr-eggbot/journal/2026-11-06.md

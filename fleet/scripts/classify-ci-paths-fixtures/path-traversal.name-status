@@ -1,0 +1,3 @@
+# expect: full
+# case: path-traversal
+M	bots/dr-eggbot/kb/../../fleet/rules/common.md

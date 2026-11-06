@@ -1,0 +1,6 @@
+# expect: full
+# case: config
+M	local/fleet.json
+M	bots/dr-eggbot/bot.json
+M	bots/dr-eggbot/profile.json
+M	bots/dr-eggbot/state.json

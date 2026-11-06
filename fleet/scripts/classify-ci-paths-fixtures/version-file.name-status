@@ -1,0 +1,3 @@
+# expect: full
+# case: version-file
+M	fleet/VERSION

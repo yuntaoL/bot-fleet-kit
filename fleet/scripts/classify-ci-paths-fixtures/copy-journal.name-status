@@ -1,0 +1,3 @@
+# expect: full
+# case: copy-journal
+C100	bots/dr-eggbot/journal/2026-11-06.md	bots/dr-eggbot/journal/2026-11-07.md

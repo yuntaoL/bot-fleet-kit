@@ -1,0 +1,4 @@
+# expect: full
+# case: new-unknown-path
+A	mystery/brand-new.md
+A	bots/dr-eggbot/newdir/file.md

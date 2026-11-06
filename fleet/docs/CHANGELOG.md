@@ -1,5 +1,16 @@
 # Changelog (template)
 
+## 0.10.6 – 2026-11-06
+
+**CI skips the long selftest only when every changed path is inert bot prose.** The check name stays `validate`. `validate.sh` and `audit.sh` still run on every push and pull request. Path filters are not used.
+
+- **Allowlist:** `bots/<slug>/journal/YYYY-MM-DD.md` and `bots/<slug>/kb/**/*.md` (slug `[a-z0-9-]+`). A change is docs-only only when every path matches and the diff is an add or a modify, or a rename whose old and new paths both match. `fleet/scripts/classify-ci-paths.sh` prints `docs-only` or `full`.
+- **Always run:** `validate.sh` (kb front matter, INDEX links, `check-journal.sh`), `audit.sh` (sensitive-pattern grep of tracked files outside `fleet/` and `.github/`, including journal and kb, plus journal gaps for today and yesterday), and `test-classify-ci-paths.sh`.
+- **Skipped only then:** `selftest.sh`. It does not read `bots/<slug>/journal` or `bots/<slug>/kb` from the checkout under test. It copies `fleet/`, `templates/`, `.github/`, `README.md`, `LICENSE` and `examples/` into a scratch fleet and writes its own journal and kb files there.
+- **Fail closed (selftest runs):** deletions (including of an allowlisted file), copies (`git diff --find-copies` status C, so a copy whose source also changed is not hidden as an add), type changes, renames that touch any path outside the allowlist, unknown or unparseable name-status, any other path (rules, scripts, schema, workflows, config, prompts, skills, routines, memory, secrets, instructions, non-markdown under kb, journal names that are not `YYYY-MM-DD.md`), empty diffs, zero or missing or non-hex SHAs, conflicting classifier arguments, and any classifier error or output other than the token `docs-only`. The classify step exits 0 and records `full` when the classifier fails, so the job continues into selftest instead of stopping before it.
+- **Tests:** `fleet/scripts/test-classify-ci-paths.sh` (fixture name-status files, CLI cases, live git ranges, workflow contract). `selftest.sh` runs it first.
+- Upgrade: from 0.10.5, `BOT_ROLE=manager fleet/scripts/upgrade.sh 0.10.6 --dry-run`, then without `--dry-run`. No migration. No prompt change. No user-data change. Fleets receive the workflow with `.github/`.
+
 ## 0.10.5 – 2026-10-30
 
 **Per-turn journaling (fixes interactive work going unrecorded).** Routine runs journaled reliably; chat work did not, because "run" was never defined for a chat session, so "before ending" never fired.

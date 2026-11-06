@@ -1,0 +1,4 @@
+# expect: full
+# case: mixed
+M	bots/dr-eggbot/journal/2026-11-06.md
+M	fleet/rules/common.md

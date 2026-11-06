@@ -1,0 +1,4 @@
+# expect: docs-only
+# case: journal-only
+A	bots/dr-eggbot/journal/2026-11-06.md
+M	bots/kira/journal/2026-11-05.md

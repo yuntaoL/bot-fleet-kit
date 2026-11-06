@@ -1,0 +1,3 @@
+# expect: full
+# case: deletion-kb
+D	bots/dr-eggbot/kb/INDEX.md
