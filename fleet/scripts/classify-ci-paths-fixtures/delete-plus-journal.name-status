@@ -1,0 +1,4 @@
+# expect: full
+# case: delete-plus-journal
+D	bots/dr-eggbot/kb/INDEX.md
+M	bots/dr-eggbot/journal/2026-11-06.md

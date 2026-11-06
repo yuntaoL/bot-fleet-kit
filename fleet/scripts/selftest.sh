@@ -9,6 +9,10 @@ set -euo pipefail
 SRC="$(git rev-parse --show-toplevel)"; KEEP=${1:-}
 T="$(mktemp -d)"; [ "$KEEP" = --keep ] || trap 'rm -rf "$T"' EXIT
 ok(){ echo "PASS $*"; }; die(){ echo "FAIL $*" >&2; exit 1; }
+# 0.10.6: the docs-only CI skip is fail-closed. These tests are fast; the scratch-fleet
+# run below is the part CI skips when every changed path is an inert journal or kb markdown file.
+"$SRC/fleet/scripts/test-classify-ci-paths.sh" || die "classify-ci-paths"
+ok "classify-ci-paths fail-closed (journal/kb allowlist)"
 export GIT_AUTHOR_NAME=selftest GIT_AUTHOR_EMAIL=selftest@example.invalid GIT_COMMITTER_NAME=selftest GIT_COMMITTER_EMAIL=selftest@example.invalid
 export GIT_CONFIG_GLOBAL="$T/gitconfig"; git config --global init.defaultBranch main; git config --global user.name selftest; git config --global user.email selftest@example.invalid
 # 0. role defaults never use bare docs/ paths (roles are read from the fleet root, docs live at fleet/docs/)

@@ -1,0 +1,3 @@
+# expect: full
+# case: journal-nested
+M	bots/dr-eggbot/journal/archive/2026-11-06.md

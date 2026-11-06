@@ -1,0 +1,3 @@
+# expect: full
+# case: quoted-path
+M	"bots/dr-eggbot/kb/my note.md"

@@ -1,0 +1,4 @@
+# expect: full
+# case: schema
+M	fleet/schema/bot.schema.json
+M	fleet/OWNERS.json

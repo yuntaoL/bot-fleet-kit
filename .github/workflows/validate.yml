@@ -1,13 +1,57 @@
+# Job name "validate" is unchanged so a required check of that name still reports.
+# classify-ci-paths.sh is fail-closed: unknown, error, empty, deletion, copy,
+# type change, zero SHA, or any path outside the allowlist => mode full.
+# docs-only still runs validate.sh and audit.sh; only selftest.sh is skipped.
+# Allowlist (add/modify, or a rename whose old and new paths both match):
+#   bots/<slug>/journal/YYYY-MM-DD.md
+#   bots/<slug>/kb/**/*.md
+# selftest.sh does not read those paths from the checkout (it builds a scratch
+# fleet). validate.sh and audit.sh do, and they always run.
+# Path filters are not used. A classifier failure still records mode full.
 name: validate
 on: [push, pull_request]
 jobs:
   validate:
+    name: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install jsonschema
+      - name: Classify changed paths
+        id: paths
+        run: |
+          set +e
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+          fi
+          if ! printf '%s' "$BASE" | grep -Eq '^[0-9a-fA-F]{4,64}$'; then
+            BASE="0000000000000000000000000000000000000000"
+          fi
+          if ! printf '%s' "$HEAD" | grep -Eq '^[0-9a-fA-F]{4,64}$'; then
+            HEAD="0000000000000000000000000000000000000000"
+          fi
+          MODE="$(fleet/scripts/classify-ci-paths.sh --base "$BASE" --head "$HEAD")"
+          rc=$?
+          if [ "$rc" -ne 0 ] || [ "$MODE" != "docs-only" ]; then
+            MODE=full
+          fi
+          if [ -n "${GITHUB_OUTPUT:-}" ]; then
+            printf 'mode=%s\n' "$MODE" >> "$GITHUB_OUTPUT"
+          fi
+          echo "CI path mode: $MODE (base=$BASE head=$HEAD classifier_exit=$rc)"
+          exit 0
       - run: fleet/scripts/validate.sh
       - run: fleet/scripts/audit.sh
-      - run: fleet/scripts/selftest.sh
+      - name: classify-ci-paths tests
+        run: fleet/scripts/test-classify-ci-paths.sh
+      - name: selftest
+        if: ${{ steps.paths.outputs.mode != 'docs-only' }}
+        run: fleet/scripts/selftest.sh

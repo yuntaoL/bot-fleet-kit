@@ -1,0 +1,4 @@
+# expect: docs-only
+# case: journal-and-kb-inert
+A	bots/dr-eggbot/journal/2026-11-07.md
+M	bots/dr-eggbot/kb/proposals/note.md

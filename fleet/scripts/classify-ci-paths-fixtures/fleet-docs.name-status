@@ -1,0 +1,3 @@
+# expect: full
+# case: fleet-docs
+M	fleet/docs/CONTRIBUTING.md

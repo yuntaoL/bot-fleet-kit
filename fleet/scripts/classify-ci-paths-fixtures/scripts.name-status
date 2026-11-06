@@ -1,0 +1,4 @@
+# expect: full
+# case: scripts
+M	fleet/scripts/validate.sh
+M	fleet/scripts/selftest.sh

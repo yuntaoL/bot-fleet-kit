@@ -1,0 +1,3 @@
+# expect: full
+# case: instructions
+M	bots/dr-eggbot/instructions.md

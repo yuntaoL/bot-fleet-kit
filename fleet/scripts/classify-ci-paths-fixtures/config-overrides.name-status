@@ -1,0 +1,3 @@
+# expect: full
+# case: config-overrides
+M	local/overrides.md

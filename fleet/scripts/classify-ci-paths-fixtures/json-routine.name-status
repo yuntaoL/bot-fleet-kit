@@ -1,0 +1,3 @@
+# expect: full
+# case: json-routine
+M	bots/dr-eggbot/routines/fleet-ci-check.json

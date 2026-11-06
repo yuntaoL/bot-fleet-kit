@@ -1,0 +1,3 @@
+# expect: full
+# case: rename-inert-to-sensitive
+R100	bots/dr-eggbot/journal/2026-11-06.md	bots/dr-eggbot/rules.md
