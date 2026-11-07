@@ -1,6 +1,6 @@
 # Layout and ownership
 
-Permissions follow the folder structure. Each top-level tree has exactly one owner class, declared in `fleet/OWNERS.json` and enforced by the pre-commit hook (`check-boundary.sh`) and `validate.sh`. That hook also refuses a commit when staged `bots/<slug>/routines/*.json`, `bots/<slug>/bot.json` or `local/fleet.json` fails the schema in `fleet/schema/` (`check-staged-config.sh`, index blob only).
+Permissions follow the folder structure. Each top-level tree has exactly one owner class, declared in `fleet/OWNERS.json` and enforced by the pre-commit hook (`check-boundary.sh`) and `validate.sh`. That hook also refuses a commit when staged `bots/<slug>/routines/*.json`, `bots/<slug>/bot.json` or `local/fleet.json` fails the index blob of its schema in `fleet/schema/` (`check-staged-config.sh`). A symlink, gitlink, or other non-regular mode is refused. The worktree copy of a schema is not the source.
 
 ```
 bot-fleet/

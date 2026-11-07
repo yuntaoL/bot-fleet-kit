@@ -8,7 +8,8 @@
 # Untracked files inside those paths are staged. Unstaged and untracked files outside them are left untouched.
 # A tracked edit left outside them stays unstaged; git rebase then refuses to start (existing), so that run does not push.
 # 0.10.8: before commit, staged bots/<slug>/routines/*.json, bots/<slug>/bot.json and local/fleet.json are
-# schema-checked from the index blob. A failure refuses the commit and the push.
+# schema-checked from index blobs (the instance and fleet/schema/*.schema.json are one snapshot).
+# A symlink, gitlink, or other non-regular mode is refused. A failure refuses the commit and the push.
 # 0.10.2: serialized per worktree by flock on <git-dir>/fleet-sync.lock (shared with pull.sh); always fetches origin main
 # explicitly; a rejected push is retried with backoff and jitter.
 set -euo pipefail

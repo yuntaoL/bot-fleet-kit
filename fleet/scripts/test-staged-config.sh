@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Behavioral tests: staged routine, bot.json and local/fleet.json are schema-checked
 # before commit (pre-commit hook) and before sync.sh commits or pushes.
-# The index blob is checked (`git show :path`). The working tree is not.
+# The index blob is checked (git cat-file of the staged blob). The working tree is not.
+# Schemas come from that same index snapshot. Symlinks, gitlinks, and other
+# non-regular modes fail closed. An untrusted jsonschema module cannot shadow the check.
 # Unstaged and untracked files are not checked and are not committed.
 #
 # What sync.sh stages today (unchanged by this check):
@@ -114,6 +116,11 @@ PY
 pass "hook keeps confidential scan and check-boundary.sh, and runs the schema check between them"
 
 clean() {
+  # skip-worktree hides a dirty schema from reset --hard; clear it before restoring.
+  git -C "$REPO" update-index --no-skip-worktree -- \
+    fleet/schema/fleet.schema.json fleet/schema/profile.schema.json fleet/schema/state.schema.json \
+    fleet/schema/routine.schema.json fleet/schema/owners.schema.json fleet/schema/bot.schema.json \
+    fleet/scripts/schema_check.py >/dev/null 2>&1 || true
   git -C "$REPO" fetch -q origin main
   git -C "$REPO" reset -q --hard FETCH_HEAD
   git -C "$REPO" clean -fdq
@@ -493,6 +500,221 @@ git -C "$REPO" diff --name-only | grep -q "local/overrides.md" || fail "override
 git -C "$REPO" diff --name-only | grep -q "README.md" || fail "README should remain unstaged"
 pass "worker sync stages bots/<fleet.bot>/ only, including untracked files there; local/ and README stay unstaged"
 
+# --- fail closed: type changes, untrusted schemas, shadowed imports, SystemExit(0) ---
+
+# ACMR omits type changes. A tracked routine replaced by a symlink must still be refused.
+clean; snap
+rm "$REPO/bots/atlas/routines/loop.json"
+ln -s /tmp/not-a-routine "$REPO/bots/atlas/routines/loop.json"
+git -C "$REPO" add -- bots/atlas/routines/loop.json
+if git -C "$REPO" diff --cached --name-only --diff-filter=ACMR -- bots/atlas/routines/loop.json | grep -q .; then
+  fail "diff-filter ACMR listed the symlink type change"
+fi
+git -C "$REPO" diff --cached --raw -- bots/atlas/routines/loop.json | grep -q 120000 || fail "staged routine was not mode 120000"
+hook_commit worker atlas "symlink routine"
+assert_blocked "hook blocks a routine replaced by a symlink"
+printf '%s\n' "$CAP" | grep -q "120000" || fail "hook did not name mode 120000:
+$CAP"
+sync_run worker atlas "symlink routine"
+assert_blocked "sync does not push a routine replaced by a symlink"
+printf '%s\n' "$CAP" | grep -q "sync: refusing commit and push" || fail "sync missed the symlink refusal:
+$CAP"
+printf '%s\n' "$CAP" | grep -q "120000" || fail "sync did not name mode 120000:
+$CAP"
+git -C "$REMOTE" show HEAD:bots/atlas/routines/loop.json | grep -q '"status": "active"' || fail "remote routine changed"
+pass "symlink type change is refused by the hook and by sync; remote unchanged"
+
+# Gitlink (160000) is also a type change ACMR drops. Commit would record it without git add rewriting the index.
+clean; snap
+sha="$(git -C "$REPO" rev-parse HEAD)"
+git -C "$REPO" update-index --add --cacheinfo "160000,$sha,bots/atlas/routines/loop.json"
+if git -C "$REPO" diff --cached --name-only --diff-filter=ACMR -- bots/atlas/routines/loop.json | grep -q .; then
+  fail "diff-filter ACMR listed the gitlink type change"
+fi
+git -C "$REPO" ls-files --stage -- bots/atlas/routines/loop.json | grep -q '^160000' || fail "index was not a gitlink"
+hook_commit worker atlas "gitlink routine"
+assert_blocked "hook blocks a routine replaced by a gitlink"
+printf '%s\n' "$CAP" | grep -q "160000" || fail "hook did not name mode 160000:
+$CAP"
+pass "gitlink mode is refused; nothing is committed or pushed"
+
+# Regular executable files stay allowed.
+clean
+git -C "$REPO" update-index --chmod=+x -- bots/atlas/routines/loop.json
+hook_commit worker atlas "executable routine"
+[ "$CAP_RC" = 0 ] || fail "mode 100755 was refused:
+$CAP"
+git -C "$REPO" ls-tree HEAD -- bots/atlas/routines/loop.json | grep -q '^100755' || fail "commit did not keep mode 100755"
+pass "mode 100755 still commits"
+
+# Unstaged schema loosened to true. The index schema stays strict.
+clean; snap
+printf 'true\n' > "$REPO/fleet/schema/routine.schema.json"
+grep -qx 'true' "$REPO/fleet/schema/routine.schema.json" || fail "worktree schema was not loosened"
+git -C "$REPO" show :fleet/schema/routine.schema.json | grep -q '"enum"' || fail "index schema was not the strict one"
+mutate bots/atlas/routines/loop.json routine pause_recommended
+sync_run worker atlas "dirty schema"
+assert_blocked "dirty worktree schema does not admit pause_recommended"
+printf '%s\n' "$CAP" | grep -q "pause_recommended" || fail "strict index schema did not reject the value:
+$CAP"
+if git -C "$REPO" diff --cached --name-only -- fleet/schema/routine.schema.json | grep -q .; then
+  fail "dirty schema was staged"
+fi
+pass "unstaged schema edited to true does not admit an invalid routine"
+
+# skip-worktree hides the same looseness from git diff and git status.
+clean; snap
+git -C "$REPO" update-index --skip-worktree -- fleet/schema/routine.schema.json
+printf 'true\n' > "$REPO/fleet/schema/routine.schema.json"
+if git -C "$REPO" diff -- fleet/schema/routine.schema.json | grep -q .; then
+  fail "skip-worktree schema diff was visible"
+fi
+if git -C "$REPO" status --porcelain -- fleet/schema/routine.schema.json | grep -q .; then
+  fail "skip-worktree schema showed in status"
+fi
+mutate bots/atlas/routines/loop.json routine pause_recommended
+sync_run worker atlas "skip-worktree schema"
+assert_blocked "skip-worktree schema does not admit pause_recommended"
+printf '%s\n' "$CAP" | grep -q "pause_recommended" || fail "skip-worktree schema was the one that validated:
+$CAP"
+pass "skip-worktree schema edited to true does not admit an invalid routine"
+
+# The refused commit must not become an ancestor that a later sync pushes once the schema is restored.
+clean; snap
+printf 'true\n' > "$REPO/fleet/schema/routine.schema.json"
+mutate bots/atlas/routines/loop.json routine pause_recommended
+printf -- '- 12:40 would-be ancestor\n' >> "$REPO/bots/atlas/journal/2026-11-07.md"
+sync_run worker atlas "dirty schema first"
+assert_blocked "dirty schema did not refuse the invalid routine"
+git -C "$REPO" checkout -q -- fleet/schema/routine.schema.json
+git -C "$REPO" show :fleet/schema/routine.schema.json | grep -q '"enum"' || fail "restored schema is not the strict index blob"
+grep -q '"enum"' "$REPO/fleet/schema/routine.schema.json" || fail "worktree schema was not restored"
+sync_run worker atlas "restore then sync"
+assert_blocked "restore then sync pushed a bad ancestor"
+git -C "$REMOTE" show HEAD:bots/atlas/routines/loop.json | grep -q '"status": "active"' || fail "remote routine is not the original"
+git -C "$REMOTE" show HEAD:bots/atlas/routines/loop.json | grep -q pause_recommended && fail "remote routine contains pause_recommended" || true
+git -C "$REMOTE" show HEAD:bots/atlas/journal/2026-11-07.md | grep -q '12:40' && fail "journal reached the remote with the bad ancestor" || true
+pass "restoring a dirty schema and syncing does not push the invalid routine"
+
+# A schema symlink whose link text is "true" is a boolean schema if the blob is parsed. Mode must win.
+clean; snap
+rm "$REPO/fleet/schema/routine.schema.json"
+ln -s true "$REPO/fleet/schema/routine.schema.json"
+git -C "$REPO" add -- fleet/schema/routine.schema.json
+git -C "$REPO" ls-files --stage -- fleet/schema/routine.schema.json | grep -q '^120000' || fail "schema was not staged as a symlink"
+mutate bots/atlas/routines/loop.json routine pause_recommended
+sync_run worker atlas "symlink schema"
+assert_blocked "symlink schema true admitted pause_recommended"
+printf '%s\n' "$CAP" | grep -q "120000" || fail "symlink schema was not refused by mode:
+$CAP"
+pass "a schema staged as a symlink is refused; remote unchanged"
+
+# Untracked fleet/scripts/jsonschema.py would shadow python fleet/scripts/schema_check.py and no-op validate.
+clean; snap
+cat > "$REPO/fleet/scripts/jsonschema.py" << 'PY'
+def validate(instance, schema):
+    return None
+PY
+mutate bots/atlas/routines/loop.json routine pause_recommended
+sync_run worker atlas "shadow jsonschema"
+assert_blocked "untracked jsonschema.py no-op"
+printf '%s\n' "$CAP" | grep -E -q 'jsonschema.py|pause_recommended' || fail "shadow was not refused:
+$CAP"
+git -C "$REPO" status --porcelain -- fleet/scripts/jsonschema.py | grep -q '^??' || fail "shadow file was not left untracked"
+git -C "$REPO" cat-file -e HEAD:fleet/scripts/jsonschema.py 2>/dev/null && fail "shadow module was committed" || true
+git -C "$REMOTE" cat-file -e HEAD:fleet/scripts/jsonschema.py 2>/dev/null && fail "shadow module was pushed" || true
+pass "untracked fleet/scripts/jsonschema.py cannot no-op the checker or get pushed"
+
+# SystemExit(0) from the real validator function is a failure, and the staged blob still does not push.
+clean; snap
+mutate bots/atlas/routines/loop.json routine pause_recommended
+git -C "$REPO" add -- bots/atlas/routines/loop.json
+marker="$T/sysexit-marker"
+rm -f "$marker"
+set +e
+(cd "$REPO" && python3 - "$marker" << 'PY'
+import io, sys
+sys.path.insert(0, "fleet/scripts")
+import schema_check
+real = schema_check.load_index_schemas
+def wrapped():
+    mod, schemas = real()
+    def boom(instance, schema):
+        raise SystemExit(0)
+    mod.validate = boom
+    return mod, schemas
+schema_check.load_index_schemas = wrapped
+out, err = io.StringIO(), io.StringIO()
+old_out, old_err = sys.stdout, sys.stderr
+sys.stdout, sys.stderr = out, err
+try:
+    rc = schema_check.main_staged()
+finally:
+    sys.stdout, sys.stderr = old_out, old_err
+text_out, text_err = out.getvalue(), err.getvalue()
+if rc != 0 and "check-staged-config: pass" not in text_out and "validator SystemExit(0) is not a pass" in text_err:
+    open(sys.argv[1], "w").write(text_err)
+    sys.exit(0)
+sys.stderr.write("rc=%r\nout=%r\nerr=%r\n" % (rc, text_out, text_err))
+sys.exit(1)
+PY
+)
+py_rc=$?
+set -e
+[ -f "$marker" ] || fail "SystemExit(0) counted as success (python rc=$py_rc)"
+sync_run worker atlas "after SystemExit"
+assert_blocked "SystemExit(0) sync"
+printf '%s\n' "$CAP" | grep -q "sync: refusing commit and push" || fail "sync pushed after SystemExit:
+$CAP"
+pass "validator SystemExit(0) is not a pass and sync does not push"
+
+# A tracked checker that exits 0 on import must not satisfy the pass signal, and must not be pushed.
+clean; snap
+printf 'raise SystemExit(0)\n' > "$REPO/fleet/scripts/schema_check.py"
+git -C "$REPO" add -- fleet/scripts/schema_check.py
+git -C "$REPO" commit -qm "hostile checker" --no-verify
+BEFORE="$(head_sha)"
+mutate bots/atlas/routines/loop.json routine pause_recommended
+sync_run worker atlas "hostile SystemExit"
+assert_blocked "hostile checker SystemExit(0)"
+printf '%s\n' "$CAP" | grep -q "validator SystemExit(0) is not a pass" || fail "shell treated SystemExit(0) as a pass:
+$CAP"
+git -C "$REPO" show HEAD:fleet/scripts/schema_check.py | grep -q "raise SystemExit" || fail "hostile checker was not what ran"
+git -C "$REMOTE" show HEAD:fleet/scripts/schema_check.py | grep -q "raise SystemExit" && fail "hostile checker reached the remote" || true
+git -C "$REMOTE" show HEAD:bots/atlas/routines/loop.json | grep -q pause_recommended && fail "remote routine contains pause_recommended" || true
+pass "SystemExit(0) from the checker is not a pass and nothing reaches the remote"
+
+# skip-worktree can hide a no-op checker from git status. The worktree bytes must match the index blob.
+clean; snap
+git -C "$REPO" update-index --skip-worktree -- fleet/scripts/schema_check.py
+cat > "$REPO/fleet/scripts/schema_check.py" << 'PY'
+import sys
+def main_staged():
+    sys.stdout.write("check-staged-config: pass\n")
+    return 0
+PY
+if git -C "$REPO" status --porcelain -- fleet/scripts/schema_check.py | grep -q .; then
+  fail "skip-worktree checker showed in status"
+fi
+mutate bots/atlas/routines/loop.json routine pause_recommended
+sync_run worker atlas "skip-worktree checker"
+assert_blocked "skip-worktree checker no-op"
+printf '%s\n' "$CAP" | grep -q "schema_check.py is not tracked and clean" || fail "dirty checker was executed:
+$CAP"
+pass "a skip-worktree no-op checker cannot admit an invalid routine"
+
+# Upgrade commits a new schema_check.py (worktree matches the index, HEAD does not) with the hook installed.
+clean; snap
+printf '\n# upgrade marker\n' >> "$REPO/fleet/scripts/schema_check.py"
+git -C "$REPO" add -- fleet/scripts/schema_check.py
+capture env BOT_NAME=atlas BOT_ROLE=manager BOT_FLEET_UPGRADE=1 git -C "$REPO" commit -qm "upgrade checker"
+[ "$CAP_RC" = 0 ] || fail "upgrade could not commit a clean staged checker:
+$CAP"
+[ "$(head_sha)" != "$BEFORE" ] || fail "upgrade commit did not happen"
+[ "$(remote_sha)" = "$RBEFORE" ] || fail "upgrade commit was pushed"
+git -C "$REPO" show HEAD:fleet/scripts/schema_check.py | grep -q "upgrade marker" || fail "committed checker is not the staged blob"
+pass "a checker staged clean against the index still commits under the upgrade hook"
+
 echo
 echo "staged-config tests: $pass_n passed"
-[ "$pass_n" -ge 16 ]
+[ "$pass_n" -ge 37 ]
