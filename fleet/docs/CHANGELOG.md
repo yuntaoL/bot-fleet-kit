@@ -1,5 +1,15 @@
 # Changelog (template)
 
+## 0.10.8 – 2026-11-07
+
+**Staged configuration JSON is schema-checked before commit.** A bad value such as routine or fleet status `pause_recommended`, or an unexpected `status` on `bot.json`, is refused before `git commit` and before `sync.sh` pushes. The working tree is not read. Only the staged blob (`git show :path`) of a staged file is checked. Schemas are unchanged. Reconcile policy and routine rules are unchanged.
+
+- **Paths:** `bots/<slug>/routines/*.json` against `routine.schema.json`, `bots/<slug>/bot.json` against `bot.schema.json`, `local/fleet.json` against `fleet.schema.json`. `validate.sh` and this check both call `schema_check.apply_schema` (`jsonschema.validate` on those schema files). `fleet/scripts/check-staged-config.sh` runs it on the index. Loading it does not write `__pycache__` into the tree. Journals and other non-config files are ignored.
+- **Where:** `sync.sh` runs the check after `git add` and before `git commit`, and on failure exits without committing or pushing. The pre-commit hook installed by `install-hook.sh` runs it after the confidential scan and before `check-boundary.sh`. Those two checks are unchanged. `validate.sh`, `audit.sh` and the CI workflow are unchanged in behavior.
+- **What `sync.sh` stages (unchanged):** paths given on the command line, otherwise `bots/<fleet.bot>/`. The manager also stages `local/` and `README.md`, and `bots/<fleet.bot>/` when that directory exists. `git add --` those paths only (never `-A`): untracked files inside them are staged; unstaged and untracked files outside them are not staged, not committed and not schema-checked. `git commit` still has no pathspec, so the commit is the whole index. A tracked edit left outside those paths stays unstaged, and `git rebase` then refuses to start, so that run does not push.
+- **Tests:** `fleet/scripts/test-staged-config.sh`. `selftest.sh` runs it.
+- Upgrade: from 0.10.7, `BOT_ROLE=manager fleet/scripts/upgrade.sh 0.10.8 --dry-run`, then without `--dry-run`. No migration. No prompt change. No user-data change. `upgrade-run.sh` reinstalls the hook, which is what adds the check to an existing fleet.
+
 ## 0.10.6 – 2026-11-06
 
 **CI skips the long selftest only when every changed path is inert bot prose.** The check name stays `validate`. `validate.sh` and `audit.sh` still run on every push and pull request. Path filters are not used.

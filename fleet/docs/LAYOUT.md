@@ -1,6 +1,6 @@
 # Layout and ownership
 
-Permissions follow the folder structure. Each top-level tree has exactly one owner class, declared in `fleet/OWNERS.json` and enforced by the pre-commit hook (`check-boundary.sh`) and `validate.sh`.
+Permissions follow the folder structure. Each top-level tree has exactly one owner class, declared in `fleet/OWNERS.json` and enforced by the pre-commit hook (`check-boundary.sh`) and `validate.sh`. That hook also refuses a commit when staged `bots/<slug>/routines/*.json`, `bots/<slug>/bot.json` or `local/fleet.json` fails the schema in `fleet/schema/` (`check-staged-config.sh`, index blob only).
 
 ```
 bot-fleet/
@@ -14,7 +14,7 @@ bot-fleet/
 │   ├── roles/                    manager.md builder.md worker.md (used directly, never copied)
 │   ├── skills/                   fleet skills (fleet-change, …)
 │   ├── docs/  schema/            documentation; JSON Schemas
-│   ├── scripts/                  bootstrap, worktree, sync, upgrade, validate, audit, compat, owners.py, …
+│   ├── scripts/                  bootstrap, worktree, sync, upgrade, validate, audit, check-staged-config, compat, owners.py, schema_check.py, …
 │   └── migrations/               <version>.sh, idempotent
 ├── .bot                          untracked, per worktree (0.10.5+): one line bots/<slug>/bot.json; how a bot finds itself
 ├── templates/                    template  placeholder/starter files only

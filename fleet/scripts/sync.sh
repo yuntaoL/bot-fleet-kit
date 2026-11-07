@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 # The sync loop, run inside YOUR worktree: fetch, rebase onto origin/main, commit only paths OWNERS.json grants you, push, retry.
-# Usage: fleet/scripts/sync.sh "<commit message>" [paths...]   (default paths: bots/<fleet.bot>/; the manager also gets local/ and README.md)
+# Usage: fleet/scripts/sync.sh "<commit message>" [paths...]
+# Stages with `git add --` (never -A), then commits the whole index:
+#   paths given: exactly those paths
+#   no paths, manager: local/ , README.md , and bots/<fleet.bot>/ when that directory exists
+#   no paths, anyone else: bots/<fleet.bot>/
+# Untracked files inside those paths are staged. Unstaged and untracked files outside them are left untouched.
+# A tracked edit left outside them stays unstaged; git rebase then refuses to start (existing), so that run does not push.
+# 0.10.8: before commit, staged bots/<slug>/routines/*.json, bots/<slug>/bot.json and local/fleet.json are
+# schema-checked from the index blob. A failure refuses the commit and the push.
 # 0.10.2: serialized per worktree by flock on <git-dir>/fleet-sync.lock (shared with pull.sh); always fetches origin main
 # explicitly; a rejected push is retried with backoff and jitter.
 set -euo pipefail
@@ -16,6 +24,10 @@ if [ $# -eq 0 ]; then if [ "$role" = manager ]; then set -- local/ README.md; [ 
 git add -- "$@"
 if git diff --cached --quiet; then
   echo "sync: no change"; git fetch -q origin main || true; git rebase -q origin/main 2>/dev/null || git rebase --abort 2>/dev/null || true; exit 0
+fi
+if ! fleet/scripts/check-staged-config.sh; then
+  echo "sync: refusing commit and push; staged configuration JSON failed schema check" >&2
+  exit 1
 fi
 BOT_NAME="$me" BOT_ROLE="$role" git commit -qm "$me: $msg"
 for i in 1 2 3 4 5 6; do

@@ -9,6 +9,9 @@ set -euo pipefail
 SRC="$(git rev-parse --show-toplevel)"; KEEP=${1:-}
 T="$(mktemp -d)"; [ "$KEEP" = --keep ] || trap 'rm -rf "$T"' EXIT
 ok(){ echo "PASS $*"; }; die(){ echo "FAIL $*" >&2; exit 1; }
+# 0.10.8: staged configuration JSON is schema-checked before commit (sync.sh and the pre-commit hook).
+"$SRC/fleet/scripts/test-staged-config.sh" || die "staged-config"
+ok "staged config schema (invalid routine, bot.json, fleet.json blocked before commit and push)"
 # 0.10.6: the docs-only CI skip is fail-closed. These tests are fast; the scratch-fleet
 # run below is the part CI skips when every changed path is an inert journal or kb markdown file.
 "$SRC/fleet/scripts/test-classify-ci-paths.sh" || die "classify-ci-paths"

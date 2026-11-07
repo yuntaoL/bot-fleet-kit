@@ -13,16 +13,19 @@ python3 fleet/scripts/owners.py audit || err=1
 ! grep -rlnE '[{]{2}[A-Z_]+[}]{2}' fleet/rules fleet/roles 2>/dev/null | sed 's/^/FAIL fill-in placeholder in shared file: /' | grep . || err=1
 # 0.10.2: private routine steps never tracked
 ! git ls-files | grep -E '(^|/)private-[^/]*\.steps\.md$' | sed 's/^/FAIL tracked private steps file: /' | grep . || err=1
-python3 - <<'PY' || err=1
+PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY' || err=1
 import json, glob, os, re, sys
 try: import jsonschema
 except ImportError: sys.exit("validate: pip install jsonschema")
+sys.dont_write_bytecode = True
+sys.path.insert(0, "fleet/scripts")
+import schema_check
 S = {n: json.load(open(f"fleet/schema/{n}.schema.json")) for n in ["fleet","profile","state","routine","owners","bot"]}
 err = 0
 def chk(path, s):
     global err
-    try: jsonschema.validate(json.load(open(path)), S[s])
-    except Exception as e: err += 1; print(f"FAIL {path}: {str(e).splitlines()[0]}")
+    msg = schema_check.check_file(path, s, schemas=S, jsonschema_mod=jsonschema)
+    if msg: err += 1; print(msg)
 chk("fleet/OWNERS.json","owners")
 D="templates"
 chk(f"{D}/bot/profile.json","profile"); chk(f"{D}/bot/state.json","state")
