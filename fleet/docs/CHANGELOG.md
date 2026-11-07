@@ -1,5 +1,13 @@
 # Changelog (template)
 
+## 0.10.7 – 2026-11-07
+
+**Selftest's journal-gap check no longer fails when it runs across local midnight.** The check recorded today's date, slept 61s, wrote a journal line at the wall-clock minute, and re-checked with a fresh today. A UTC run that reached the check at 23:59 (bot-fleet run 42315371378) rolled the day mid-test, so the journal line and the second check were not about the same day.
+
+- **Clock:** if the next local midnight is under 30s away, the check waits until it has passed, then records the day. The wait is the epoch of `tomorrow 00:00` minus now, so a 23-hour or 25-hour civil day is right (a fixed 86400s day goes negative on a fall-back evening and skips the wait on a spring-forward evening). A negative or longer result is not slept. The journal line is pinned at `23:59`. The second `check-journal.sh` is given that day. The 61s sleep is gone. Every assertion is the same.
+- **Tests:** `fleet/scripts/test-journal-gap-midnight.sh` runs that live selftest block under three clocks: normal, crossing midnight, and starting near midnight (local 23:59:10, 50s out, outside the 30s wait). The crossing case runs the pre-fix checks to completion on the original day, then its 61s sleep crosses midnight and the fresh today must warn, then the live lines start at local 23:59:40 and must pass. An injectable clock (TZ plus a `clock_gettime` preload, so the real `date -d 'tomorrow 00:00'` runs) checks fall-back and spring-forward days in America/New_York and Europe/London at 23:00:03, 23:59:40 and 23:59:45, plus a normal day. `selftest.sh` runs the fixtures first.
+- Upgrade: from 0.10.6, `BOT_ROLE=manager fleet/scripts/upgrade.sh 0.10.7 --dry-run`, then without `--dry-run`. No migration. No prompt change. No user-data change.
+
 ## 0.10.6 – 2026-11-06
 
 **CI skips the long selftest only when every changed path is inert bot prose.** The check name stays `validate`. `validate.sh` and `audit.sh` still run on every push and pull request. Path filters are not used.
