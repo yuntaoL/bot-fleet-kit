@@ -1,5 +1,13 @@
 # Changelog (template)
 
+## 0.10.7 – 2026-11-07
+
+**Selftest's journal-gap check no longer fails when it runs across local midnight.** The check recorded today's date, slept 61s, wrote a journal line at the wall-clock minute, and re-checked with a fresh today. A UTC run that reached the check at 23:59 (bot-fleet run 42315371378) rolled the day mid-test, so the journal line and the second check were not about the same day.
+
+- **Clock:** if local midnight is under 30s away, the check waits until it has passed, then records the day. The journal line is pinned at `23:59`. The second `check-journal.sh` is given that day. The 61s sleep is gone. Every assertion is the same.
+- **Tests:** `fleet/scripts/test-journal-gap-midnight.sh` runs that live selftest block under three clocks: normal, crossing midnight (local 23:59:40, the window where the old 61s sequence fails), and starting near midnight (local 23:59:10). The crossing case runs the pre-fix sequence and requires it to fail, then the live lines and requires them to pass. `selftest.sh` runs the fixtures first.
+- Upgrade: from 0.10.6, `BOT_ROLE=manager fleet/scripts/upgrade.sh 0.10.7 --dry-run`, then without `--dry-run`. No migration. No prompt change. No user-data change.
+
 ## 0.10.6 – 2026-11-06
 
 **CI skips the long selftest only when every changed path is inert bot prose.** The check name stays `validate`. `validate.sh` and `audit.sh` still run on every push and pull request. Path filters are not used.

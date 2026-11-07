@@ -13,6 +13,10 @@ ok(){ echo "PASS $*"; }; die(){ echo "FAIL $*" >&2; exit 1; }
 # run below is the part CI skips when every changed path is an inert journal or kb markdown file.
 "$SRC/fleet/scripts/test-classify-ci-paths.sh" || die "classify-ci-paths"
 ok "classify-ci-paths fail-closed (journal/kb allowlist)"
+# 0.10.7: journal-gap midnight fixtures (normal clock, crossing midnight, starting near midnight).
+# The crossing case runs the pre-fix sequence and requires it to fail, then this file's journal-gap lines.
+"$SRC/fleet/scripts/test-journal-gap-midnight.sh" || die "journal-gap midnight"
+ok "journal-gap midnight (normal clock, crossing midnight, starting near midnight)"
 export GIT_AUTHOR_NAME=selftest GIT_AUTHOR_EMAIL=selftest@example.invalid GIT_COMMITTER_NAME=selftest GIT_COMMITTER_EMAIL=selftest@example.invalid
 export GIT_CONFIG_GLOBAL="$T/gitconfig"; git config --global init.defaultBranch main; git config --global user.name selftest; git config --global user.email selftest@example.invalid
 # 0. role defaults never use bare docs/ paths (roles are read from the fleet root, docs live at fleet/docs/)
@@ -149,10 +153,13 @@ cd "$A"; ok "0.10.2 pull.sh, concurrent sync.sh, private-*.steps.md ignored and 
   && rm $R/private-p.json && touch bare.steps.md && printf '{"name":"b","schedule":"daily","stepsFile":"bare.steps.md"}\n' > $R/b.json && out="$(fleet/scripts/validate.sh 2>&1)" && grep -q "WARN .*b.json: stepsFile 'bare.steps.md' is not repo-relative" <<<"$out"; r=$?; rm -f $R/private-p.json $R/b.json bare.steps.md; exit $r) || die "private stepsFile / repo-relative"
 ok "0.10.3 private routine missing stepsFile ok, private name enforced, non-repo-relative stepsFile warns"
 # 0.10.5: journal-gap check (per-turn journal rule)
+# Clock-independent: never straddle local midnight (a 23:59 start used to roll D mid-test, run 42315371378); the journal
+# line uses a pinned 23:59 time and explicit day D instead of wall clock + sleep 61.
+s2m=$(( 86400 - ( $(date +%s) - $(date -d "$(date +%F) 00:00" +%s) ) )); [ "$s2m" -lt 30 ] && sleep $((s2m + 2))
 (cd "$A" && B=bots/atlas && D="$(date +%F)" && mkdir -p $B/kb $B/journal && echo gap > $B/kb/gap-test.md && git add $B && BOT_ROLE=manager git commit -qm "atlas: gap test work" --no-verify \
   && c="$(fleet/scripts/check-journal.sh)" && grep -q "^WARN atlas: activity" <<<"$c" && ! fleet/scripts/check-journal.sh --strict >/dev/null && v="$(fleet/scripts/validate.sh 2>&1)" && grep -q "^WARN atlas: activity" <<<"$v" \
-  && sleep 61 && printf -- '- %s gap test journaled\n' "$(date +%H:%M)" >> $B/journal/$D.md && git add $B && BOT_ROLE=manager git commit -qm "atlas: journal" --no-verify \
-  && c="$(fleet/scripts/check-journal.sh)" && ! grep -q "^WARN atlas" <<<"$c" && grep -q "A run is every chat turn" fleet/rules/startup.md && grep -q "After a context summary" fleet/rules/startup.md && grep -q "Delegation carries the duty" fleet/rules/startup.md && grep -q "Every chat turn is a run" templates/THIN-PROMPT.tmpl; r=$?; h0="$(git log --format=%H --grep="^atlas: gap test work" -1)"; [ -n "$h0" ] && git reset -q --hard "$h0~1"; exit $r) || die "journal-gap check"
+  && printf -- '- 23:59 gap test journaled\n' >> $B/journal/$D.md && git add $B && BOT_ROLE=manager git commit -qm "atlas: journal" --no-verify \
+  && c="$(fleet/scripts/check-journal.sh "$D")" && ! grep -q "^WARN atlas" <<<"$c" && grep -q "A run is every chat turn" fleet/rules/startup.md && grep -q "After a context summary" fleet/rules/startup.md && grep -q "Delegation carries the duty" fleet/rules/startup.md && grep -q "Every chat turn is a run" templates/THIN-PROMPT.tmpl; r=$?; h0="$(git log --format=%H --grep="^atlas: gap test work" -1)"; [ -n "$h0" ] && git reset -q --hard "$h0~1"; exit $r) || die "journal-gap check"
 ok "0.10.5 check-journal flags unjournaled activity, clears after a journal line; per-turn, re-read and delegation rules present"
 # 0.10.5: bot.json single source: schema/missing fail, hard-coded name warns, registry drift warns + --mirror, migration, upgrade refresh
 (cd "$A" && git pull -q --ff-only && mkdir -p bots/atlas/routines && fleet/scripts/validate.sh >/dev/null && out="$(fleet/scripts/validate.sh 2>&1)" && ! grep -q "hard-codes" <<<"$out" \
