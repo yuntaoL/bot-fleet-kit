@@ -1,0 +1,3 @@
+# expect: full
+# case: unicode-slug-quoted
+M	"bots/n\303\266nascii/journal/2026-11-06.md"

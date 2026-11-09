@@ -10,6 +10,17 @@
 # full: anything else. Deletions, copies, type changes, renames that touch a
 # non-inert path, unparseable lines, empty diffs, zero or non-hex SHAs, git
 # failures, conflicting arguments, and classifier errors are full.
+# Also full: a NUL byte anywhere in the input; a path that is not printable
+# ASCII (Unicode slugs, controls, DEL); a git-quoted path (tab, newline, or
+# non-ASCII as C escapes); a tab that adds a field; a record split only by
+# LF (CR, VT, FF, NEL, U+2028, U+2029 stay inside the record); and a '#' line
+# that is not a fixture header (a comment must not hide a path).
+#
+# CI does not execute this worktree copy for the skip decision. The workflow
+# runs the base commit's blob of this file, and records full without asking
+# if this file, its tests, or .github/workflows/validate.yml changed, or if
+# that blob is missing or not a regular file. Tests of this file still run
+# from the commit under test.
 #
 # Why selftest may be skipped: selftest.sh does not read bots/<slug>/journal
 # or bots/<slug>/kb from the checkout under test. It builds a scratch fleet
@@ -63,8 +74,16 @@ def emit(mode, reason):
     print(mode)
     sys.exit(0)
 
+# Fixture files carry only these headers. Any other '#' line can hide a path.
+FIXTURE_HEADER = re.compile(r"^# (?:expect: (?:docs-only|full)|case: [A-Za-z0-9._-]+)$")
+
 def is_inert(path):
     if not path or path.startswith("/") or path.startswith("./") or "\\" in path:
+        return False
+    # Printable ASCII only. Do not unquote git's C-quoted paths and do not
+    # treat Unicode, controls, DEL, or NUL as the allowlist. A kb markdown
+    # file whose name is non-ASCII is not proven to be the same shape.
+    if any(ord(ch) < 0x20 or ord(ch) > 0x7e for ch in path):
         return False
     parts = path.split("/")
     if any(p in ("", ".", "..") for p in parts):
@@ -72,11 +91,22 @@ def is_inert(path):
     return any(rx.fullmatch(path) for rx in INERT)
 
 def classify_lines(text):
+    # A NUL is not a git path byte. Parsing past it could drop a second path.
+    if "\0" in text:
+        return FULL, "NUL byte in name-status (fail-closed)"
     lines = []
-    for ln in text.splitlines():
-        ln = ln.rstrip("\r")
-        if not ln.strip() or ln.lstrip().startswith("#"):
+    # LF only. splitlines() also breaks on CR, VT, FF, NEL, and U+2028/U+2029,
+    # so a smuggled separator plus a '#' line would hide the rest. One trailing
+    # CR (CRLF) is stripped; an embedded CR stays in the record and fails closed.
+    for ln in text.split("\n"):
+        if ln.endswith("\r"):
+            ln = ln[:-1]
+        if ln.strip() == "":
             continue
+        if ln.lstrip().startswith("#"):
+            if FIXTURE_HEADER.fullmatch(ln.strip()):
+                continue
+            return FULL, f"comment line is not a fixture header (fail-closed): {ln!r}"
         lines.append(ln)
     if not lines:
         return FULL, "empty diff (fail-closed)"

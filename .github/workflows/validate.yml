@@ -5,9 +5,13 @@
 # Allowlist (add/modify, or a rename whose old and new paths both match):
 #   bots/<slug>/journal/YYYY-MM-DD.md
 #   bots/<slug>/kb/**/*.md
+# Not inert: bots/<slug>/state.json, rules, scripts, workflows, and any other path.
 # selftest.sh does not read those paths from the checkout (it builds a scratch
 # fleet). validate.sh and audit.sh do, and they always run.
 # Path filters are not used. A classifier failure still records mode full.
+# The skip decision runs the base commit's blob of classify-ci-paths.sh, never
+# the worktree copy. If that blob is missing or not a regular file, or if the
+# classifier, its tests, or this workflow changed, the mode is full.
 name: validate
 on: [push, pull_request]
 jobs:
@@ -23,30 +27,72 @@ jobs:
       - run: pip install jsonschema
       - name: Classify changed paths
         id: paths
+        env:
+          # Same SHAs as before: pull_request uses the base SHA, push uses
+          # github.event.before. The shell reads these names so the contract
+          # test can run this script without the GitHub expression syntax.
+          CLASSIFY_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          CLASSIFY_HEAD_SHA: ${{ github.sha }}
         run: |
           set +e
-          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-            BASE="${{ github.event.pull_request.base.sha }}"
-            HEAD="${{ github.sha }}"
-          else
-            BASE="${{ github.event.before }}"
-            HEAD="${{ github.sha }}"
-          fi
+          BASE="${CLASSIFY_BASE_SHA:-}"
+          HEAD="${CLASSIFY_HEAD_SHA:-}"
           if ! printf '%s' "$BASE" | grep -Eq '^[0-9a-fA-F]{4,64}$'; then
             BASE="0000000000000000000000000000000000000000"
           fi
           if ! printf '%s' "$HEAD" | grep -Eq '^[0-9a-fA-F]{4,64}$'; then
             HEAD="0000000000000000000000000000000000000000"
           fi
-          MODE="$(fleet/scripts/classify-ci-paths.sh --base "$BASE" --head "$HEAD")"
-          rc=$?
-          if [ "$rc" -ne 0 ] || [ "$MODE" != "docs-only" ]; then
-            MODE=full
+          MODE=full
+          reason="fail-closed"
+          blob=""
+          cleanup() { [ -n "$blob" ] && rm -f "$blob"; }
+          trap cleanup EXIT
+          # Zero or missing SHAs cannot name a trusted base blob.
+          if printf '%s' "$BASE" | grep -Eq '^0+$' || printf '%s' "$HEAD" | grep -Eq '^0+$'; then
+            reason="missing or zero SHA (fail-closed)"
+          else
+            # Blob ids, not git diff: a diff driver cannot hide a byte change.
+            # Different ids, or present on only one side, means the trusted
+            # file changed. Absent on both sides is not a change; the mode
+            # check below still refuses a missing classifier blob.
+            changed=0
+            for p in fleet/scripts/classify-ci-paths.sh fleet/scripts/test-classify-ci-paths.sh .github/workflows/validate.yml; do
+              base_id="$(git rev-parse -q --verify "$BASE:$p" 2>/dev/null || true)"
+              head_id="$(git rev-parse -q --verify "$HEAD:$p" 2>/dev/null || true)"
+              if [ "$base_id" != "$head_id" ]; then
+                changed=1
+                break
+              fi
+            done
+            if [ "$changed" -ne 0 ]; then
+              reason="classifier or workflow changed (fail-closed)"
+            else
+              info="$(git ls-tree "$BASE" -- fleet/scripts/classify-ci-paths.sh 2>/dev/null || true)"
+              bits="${info%% *}"
+              if [ "$bits" != "100644" ] && [ "$bits" != "100755" ]; then
+                reason="base classifier blob is missing or not a regular file (fail-closed)"
+              else
+                blob="$(mktemp)"
+                if ! git cat-file blob "$BASE:fleet/scripts/classify-ci-paths.sh" > "$blob"; then
+                  reason="cannot read base classifier blob (fail-closed)"
+                else
+                  MODE="$(bash "$blob" --base "$BASE" --head "$HEAD")"
+                  rc=$?
+                  if [ "$rc" -ne 0 ] || [ "$MODE" != "docs-only" ]; then
+                    MODE=full
+                    reason="base classifier did not report docs-only (fail-closed, exit=${rc})"
+                  else
+                    reason="base classifier reported docs-only"
+                  fi
+                fi
+              fi
+            fi
           fi
           if [ -n "${GITHUB_OUTPUT:-}" ]; then
             printf 'mode=%s\n' "$MODE" >> "$GITHUB_OUTPUT"
           fi
-          echo "CI path mode: $MODE (base=$BASE head=$HEAD classifier_exit=$rc)"
+          echo "CI path mode: $MODE (base=$BASE head=$HEAD reason=$reason)"
           exit 0
       - run: fleet/scripts/validate.sh
       - run: fleet/scripts/audit.sh

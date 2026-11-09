@@ -1,0 +1,4 @@
+# expect: full
+# case: comment-smuggle
+M	bots/dr-eggbot/journal/2026-11-06.md
+# M	fleet/VERSION

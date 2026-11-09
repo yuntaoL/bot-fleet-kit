@@ -1,0 +1,3 @@
+# expect: full
+# case: unicode-kb-quoted
+M	"bots/dr-eggbot/kb/caf\303\251.md"

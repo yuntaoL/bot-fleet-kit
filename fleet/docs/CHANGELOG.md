@@ -1,5 +1,15 @@
 # Changelog (template)
 
+## 0.10.10 – 2026-11-09
+
+**CI skip decision uses the base classifier, and odd paths fail closed.** Residuals from the v0.10.6 classifier review (Worf, kit PR 20), not a failure of the allowlist. `validate.sh`, `audit.sh`, and `test-classify-ci-paths.sh` still run on every push and pull request. `selftest.sh` is still the only step that can be skipped, and only when the trusted decision says `docs-only`. `bots/<slug>/state.json` is not on the allowlist.
+
+- **R1.** The skip decision no longer executes the worktree copy of `fleet/scripts/classify-ci-paths.sh`. It compares blob ids of that script, `fleet/scripts/test-classify-ci-paths.sh`, and `.github/workflows/validate.yml`. If any of those differ, or either SHA is missing or zero, the mode is `full` and the HEAD classifier is not asked. If they match, it runs the base commit's blob (`git cat-file`), and only when that blob is mode `100644` or `100755`. A missing blob, a symlink, a gitlink, any other mode, or any classifier output other than the token `docs-only` is `full`. Tests still run from the commit under test. A journal-only change stays `docs-only`. A weakened HEAD classifier that always prints `docs-only` cannot flip a full change into `docs-only` when the base classifier would say `full`.
+- **R2.** Name-status parsing fails closed on the shapes that had no fixtures: Unicode slugs (raw, git-quoted, and a Cyrillic homoglyph), a non-ASCII kb filename (raw and git-quoted; not treated as inert), NUL in the buffer, a tab-smuggled extra field, git-quoted tab and newline paths, U+2028/U+2029 smuggling, and a `#` line that is not a fixture header. Records split on LF only, so those separators stay inside the record. The same bytes are covered as fixtures and as stdin.
+- **Not closed.** A same-repo change that replaces `.github/workflows/validate.yml` can still delete the selftest step or this decision. That is the same class as editing the workflow to drop selftest. This release does not weaken that gate to pretend otherwise.
+- **Tests:** `fleet/scripts/test-classify-ci-paths.sh` (124 passed: 74 fixtures, adversarial stdin, and the base-blob decision, including state.json, a dirty worktree classifier, a symlink blob, and a weakened HEAD). `selftest.sh` runs that file first.
+- Upgrade: from 0.10.9, `BOT_ROLE=manager fleet/scripts/upgrade.sh 0.10.10 --dry-run`, then without `--dry-run`. No migration. No prompt change. No user-data change. Fleets receive the workflow with `.github/`.
+
 ## 0.10.9 – 2026-11-09
 
 **Bots are not told to pull at the start of a run.** An approved fleet override already says a bot does not run `fleet/scripts/pull.sh` on every run; the builder fast-forwards worktrees on its schedule. The template was still teaching the old per-run pull, so a re-render put that instruction back.

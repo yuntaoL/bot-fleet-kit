@@ -1,0 +1,3 @@
+# expect: full
+# case: unicode-slug-raw
+M	bots/nönascii/journal/2026-11-06.md

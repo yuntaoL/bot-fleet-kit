@@ -1,0 +1,3 @@
+# expect: full
+# case: newline-quoted-path
+M	"bots/dr-eggbot/kb/foo\nbar.md"
