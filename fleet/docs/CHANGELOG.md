@@ -1,5 +1,13 @@
 # Changelog (template)
 
+## 0.10.9 – 2026-11-09
+
+**Bots are not told to pull at the start of a run.** An approved fleet override already says a bot does not run `fleet/scripts/pull.sh` on every run; the builder fast-forwards worktrees on its schedule. The template was still teaching the old per-run pull, so a re-render put that instruction back.
+
+- **Removed the pull-at-start sentence only** from `templates/THIN-PROMPT.tmpl`, `templates/ROUTINE-PROMPT.tmpl`, `templates/bot/instructions.md`, `fleet/rules/startup.md` step 1, and `fleet/rules/routines.md` step 1. The same sentence is removed from the example bootstrap lines in `examples/tracker/instructions.md` and `examples/notes-keeper/instructions.md`, and from the "start every run with fetch and rebase" sentence in `fleet/docs/AGENT_GUIDE.md`.
+- **Unchanged:** `fleet/scripts/pull.sh` (explicit fast-forward), `fleet/scripts/sync.sh` (fetch and rebase when saving), and the builder's fast-forward duty. Startup, read order, fail-safe, and the end-of-run `sync.sh` step are otherwise the same. A rename's one-time fleet-wide pull in the rename-bot skill is not a per-run pull and stays.
+- Upgrade: from 0.10.8, `BOT_ROLE=manager fleet/scripts/upgrade.sh 0.10.9 --dry-run`, then without `--dry-run`. No migration. Prompt change: re-render with `fleet/scripts/render-prompt.sh <slug>` and `fleet/scripts/render-routine-prompt.sh <slug> --all`, and re-paste one bot at a time with the owner's yes. `startup.md` and `routines.md` are read every run, so the rule text updates on the next run even before the prompt is re-pasted. An old pasted prompt may still say `pull.sh` until it is re-rendered.
+
 ## 0.10.8 – 2026-11-07
 
 **Staged configuration JSON is schema-checked before commit.** A bad value such as routine or fleet status `pause_recommended`, or an unexpected `status` on `bot.json`, is refused before `git commit` and before `sync.sh` pushes. Only staged paths are checked. Journals and other non-config files are ignored. Schemas are unchanged. Reconcile policy and routine rules are unchanged.

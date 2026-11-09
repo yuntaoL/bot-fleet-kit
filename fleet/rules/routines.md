@@ -4,7 +4,7 @@
 
 Every scheduled routine run follows this file. The live routine prompt only names the worktree, startup.md and the routine; identity comes from `.bot` and the bot.json it names (startup.md step 1); everything a run does is here and in the routine's own file in git.
 
-1. **Worktree.** Work only in your own worktree. Run `fleet/scripts/pull.sh` there first (never a bare `git pull`: it can fail when runs overlap). Then read `.bot` and the bot.json it names for your identity (startup.md step 1). Your role is your entry in `local/fleet.json`.
+1. **Worktree.** Work only in your own worktree, then read `.bot` and the bot.json it names for your identity (startup.md step 1). Your role is your entry in `local/fleet.json`.
 2. **Read the rules** exactly as `fleet/rules/startup.md` steps 2-3 say (read order and precedence live only there), and follow them.
 3. **Find and follow the routine.** Open `bots/<slug>/routines/<routine>.json` and follow its `steps`, and the `stepsFile` it points to if set. If it has neither, follow its legacy `prompt` field. The routine's steps win over the defaults in this file where they say so.
 4. **Journal every run**, skips, no-ops and failures included: one line in `bots/<slug>/journal/` (or the fleet's log mechanism named in `local/rules/`) saying what happened. The line ends with a `read:` field listing what you read, `|`-separated, and it must include the routine marker: `routine:<stepsFile name>` if the routine has a `stepsFile`, else `routine:<routine>.json`. Example: `read: rules|state|instructions|routine:daily-check.json`. A run line without the marker did not follow this file.

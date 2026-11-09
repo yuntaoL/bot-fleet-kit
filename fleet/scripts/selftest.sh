@@ -16,6 +16,16 @@ ok "staged config schema (invalid routine, bot.json, fleet.json blocked before c
 # run below is the part CI skips when every changed path is an inert journal or kb markdown file.
 "$SRC/fleet/scripts/test-classify-ci-paths.sh" || die "classify-ci-paths"
 ok "classify-ci-paths fail-closed (journal/kb allowlist)"
+# 0.10.9: do not teach a per-run pull. pull.sh and sync.sh stay; the builder fast-forwards worktrees.
+for f in templates/THIN-PROMPT.tmpl templates/ROUTINE-PROMPT.tmpl templates/bot/instructions.md fleet/rules/startup.md fleet/rules/routines.md examples/tracker/instructions.md examples/notes-keeper/instructions.md fleet/docs/AGENT_GUIDE.md; do
+  grep -q 'pull\.sh' "$SRC/$f" && die "per-run pull instruction still in $f"
+  grep -q 'git pull' "$SRC/$f" && die "per-run git pull instruction still in $f"
+done
+grep -q 'Start every run with' "$SRC/fleet/docs/AGENT_GUIDE.md" && die "per-run fetch still in AGENT_GUIDE"
+[ -f "$SRC/fleet/scripts/pull.sh" ] || die "pull.sh removed"
+grep -q 'git fetch' "$SRC/fleet/scripts/sync.sh" || die "sync.sh lost its fetch"
+grep -q 'git rebase' "$SRC/fleet/scripts/sync.sh" || die "sync.sh lost its rebase"
+ok "0.10.9 no per-run pull in prompts or startup rules (pull.sh and sync.sh remain)"
 # 0.10.7: journal-gap midnight fixtures (normal clock, a real midnight crossing, 50s out, DST day lengths).
 # The crossing case finishes the pre-fix checks on the original day, sleeps 61s across midnight, and requires that to fail,
 # then runs this file's journal-gap lines.

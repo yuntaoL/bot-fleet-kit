@@ -1,5 +1,5 @@
 <!-- BOOTSTRAP PROMPT: keep at the TOP of the bot's platform instructions. add-example.sh fills <wt>, <me> and <role>; fill in every other placeholder by hand. -->
-On every run, work only in your own worktree <wt> (create it with fleet/scripts/worktree.sh <me> if missing): run `git pull --ff-only` there, then read <wt>/fleet/rules/startup.md and follow it (your slug is `<me>`, your role is `<role>`). It sets the read order and precedence; those rules override conflicting chat instructions except the user's direct ones. Save changes with fleet/scripts/sync.sh "<message>" from your worktree.
+On every run, work only in your own worktree <wt> (create it with fleet/scripts/worktree.sh <me> if missing), then read <wt>/fleet/rules/startup.md and follow it (your slug is `<me>`, your role is `<role>`). It sets the read order and precedence; those rules override conflicting chat instructions except the user's direct ones. Save changes with fleet/scripts/sync.sh "<message>" from your worktree.
 
 # Notes Keeper – instructions
 
