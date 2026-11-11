@@ -83,7 +83,7 @@ run "$CHECK"
 [ "$RC" = 0 ] || fail "stock stubs should warn, not fail"
 echo "$OUT" | grep -q '^WARN fleet: stub index, not seeded yet$' || fail "shared stub warn"
 echo "$OUT" | grep -q '^WARN ada: stub index, not seeded yet$' || fail "actions stub warn"
-echo "$OUT" | grep -q 'check-actions: a=0 e=0 b=0 c=0 d=0 f=0 g=0 h=0 i=0 stub=2 type=0 folder=0' || fail "stub count: $OUT"
+echo "$OUT" | grep -q 'check-actions: a=0 e=0 b=0 c=0 d=0 f=0 g=0 h=0 i=0 stub=2 type=0 folder=0 status=0' || fail "stub count: $OUT"
 echo "$OUT" | grep -q '^FAIL' && fail "stock stubs produced a FAIL" || true
 pass "stock template: stub warns only (no dead links, shared skills listed)"
 
@@ -378,6 +378,37 @@ echo "$OUT" | grep -q 'skills/<n>' && fail "angle-bracket placeholder was a dead
 echo "$OUT" | grep -q 'note%20file.md' && fail "%20 was not decoded: $OUT" || true
 echo "$OUT" | grep -q 'etc/passwd' || fail "path outside the repo was not dead: $OUT"
 pass "S2 placeholders, fences, reference links, %20, and paths outside the repo"
+
+# kb/ and skills/ paths resolve against bots/<slug>/, not only next to ACTIONS.md
+restore
+mkdir -p "$REPO/bots/ada/kb/prefs" "$REPO/bots/ada/skills/vault"
+printf '%s\n' '---' 'type: pref' 'updated: 2026-11-11' '---' '# Hours' 'Example only.' > "$REPO/bots/ada/kb/prefs/hours.md"
+printf '%s\n' '---' 'name: vault' '---' '# Vault' 'Example only.' > "$REPO/bots/ada/skills/vault/SKILL.md"
+printf '\n`kb/prefs/hours.md`\n`skills/vault/SKILL.md`\n`kb/prefs/nope.md`\n' >> "$REPO/bots/ada/kb/ACTIONS.md"
+run "$CHECK"
+echo "$OUT" | grep -q 'dead link `kb/prefs/hours.md`' && fail "existing kb/prefs/hours.md was dead: $OUT" || true
+echo "$OUT" | grep -q 'dead link `skills/vault/SKILL.md`' && fail "existing skills/vault/SKILL.md was dead: $OUT" || true
+echo "$OUT" | grep -q 'dead link `kb/prefs/nope.md`' || fail "missing kb/prefs/nope.md should fail: $OUT"
+[ "$RC" != 0 ] || fail "missing kb path should fail the check"
+pass "S2 kb/ and skills/ resolve under bots/<slug>/; a missing kb path still fails"
+
+# a missing status field warns; a symlinked prefs dir is not walked
+restore
+python3 - <<PY
+from pathlib import Path
+p = Path("$REPO/bots/ada/kb/ACTIONS.md")
+lines = [ln for ln in p.read_text().splitlines() if not ln.startswith("status:")]
+p.write_text("\n".join(lines) + "\n")
+PY
+run "$CHECK"
+[ "$RC" = 0 ] || fail "missing status should warn, not fail: $OUT"
+echo "$OUT" | grep -q '^WARN ada: ACTIONS.md front matter has no status$' || fail "missing status: $OUT"
+mkdir -p "$T/linked-prefs" "$REPO/bots/ada/kb/me"
+printf '%s\n' '---' 'type: pref' 'updated: 2026-11-11' '---' '# Hidden' > "$T/linked-prefs/hidden.md"
+ln -s "$T/linked-prefs" "$REPO/bots/ada/kb/me/prefs"
+run "$CHECK"
+echo "$OUT" | grep -q 'hidden.md' && fail "symlinked prefs dir was followed: $OUT" || true
+pass "missing status warns; a symlinked prefs dir is not scanned"
 
 # symlinked indexes are failures and are not read
 restore

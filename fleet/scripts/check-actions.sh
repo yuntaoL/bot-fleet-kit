@@ -7,7 +7,8 @@
 #       A fleet.json row with no folder yet (active or pre-fleet) only warns, even when strict.
 #   (e) FAIL if a row links to a path that does not exist (markdown links, reference-style
 #       links, and backticked paths ending .md/.json/.sh/.py/.yml). Resolve relative to the
-#       file's directory first, then the repo root, after %20 decoding. A realpath outside
+#       file's directory first, then bots/<slug>/ for a kb/ or skills/ path, then the
+#       repo root, after %20 decoding. A realpath outside
 #       the repo is dead. Ignore http(s), anchors, ~/absolute paths, env/secret names,
 #       fenced code, and placeholders (<...> or kb/prefs/x.md). A symlinked ACTIONS.md or
 #       SHARED-SKILLS.md is a FAIL and is not read. A bare skill name is not a dead link.
@@ -40,11 +41,11 @@ from urllib.parse import unquote
 strict = os.environ.get("BOT_FLEET_STRICT_ACTIONS") == "1"
 library = os.environ.get("BOT_FLEET_SKILL_LIBRARY") or ""
 F = "local/fleet.json"
-counts = {k: 0 for k in "a e b c d f g h i stub type folder".split()}
+counts = {k: 0 for k in "a e b c d f g h i stub type folder status".split()}
 failed = False
 FAIL_KINDS = {"a", "e", "f"}
 # folder stays a warning under strict: a roster row with no directory yet is not a failure
-WARN_KINDS = {"b", "c", "d", "g", "h", "i", "stub", "type"}
+WARN_KINDS = {"b", "c", "d", "g", "h", "i", "stub", "type", "status"}
 ROOT = os.path.realpath(".")
 def symlink_part(rel):
     acc = ""
@@ -123,31 +124,43 @@ def targets(text):
             found.append(inner)
     return found
 
-def link_state(raw, base):
-    """skip, ok, or dead. File directory first, then repo root. Outside the repo is dead."""
+def candidate_state(abs_path):
+    """ok if the path exists inside the repo, missing if it does not, dead if it escapes."""
+    if not inside_repo(abs_path):
+        return "dead"
+    if os.path.lexists(abs_path):
+        return "ok"
+    return "missing"
+
+def link_state(raw, base, bot_root=None):
+    """skip, ok, or dead.
+
+    Order: the file's directory, then bots/<slug>/ for a kb/ or skills/ path, then the repo root.
+    A candidate whose real path leaves the repo is dead and is not replaced by a later hit.
+    """
     path = unquote(link_path(raw))
     if not path or ignored(raw) or placeholder(path):
         return "skip"
-    base_abs = base if os.path.isabs(base) else os.path.join(ROOT, base)
-    first = os.path.normpath(os.path.join(base_abs, path))
-    if not inside_repo(first):
-        return "dead"
-    if os.path.lexists(first):
-        return "ok"
-    second = os.path.normpath(os.path.join(ROOT, path))
-    if not inside_repo(second):
-        return "dead"
-    if os.path.lexists(second):
-        return "ok"
+    rel = path[2:] if path.startswith("./") else path
+    bases = [base if os.path.isabs(base) else os.path.join(ROOT, base)]
+    if bot_root and (rel.startswith("kb/") or rel.startswith("skills/")):
+        bases.append(bot_root if os.path.isabs(bot_root) else os.path.join(ROOT, bot_root))
+    bases.append(ROOT)
+    for b in bases:
+        state = candidate_state(os.path.normpath(os.path.join(b, rel)))
+        if state == "dead":
+            return "dead"
+        if state == "ok":
+            return "ok"
     return "dead"
 
-def dead_links(text, base, who):
+def dead_links(text, base, who, bot_root=None):
     seen = []
     for raw in targets(text):
         path = unquote(link_path(raw))
         if path in seen:
             continue
-        state = link_state(raw, base)
+        state = link_state(raw, base, bot_root)
         if state == "skip":
             continue
         seen.append(path)
@@ -299,6 +312,17 @@ def mentioned_rel(rel, text, slug):
             return True
     return False
 
+def iter_md(root):
+    """Markdown under root. os.walk does not follow a symlinked directory."""
+    if not os.path.isdir(root) or os.path.islink(root):
+        return
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames[:] = [d for d in dirnames if not os.path.islink(os.path.join(dirpath, d))]
+        for name in filenames:
+            path = os.path.join(dirpath, name)
+            if name.endswith(".md") and not os.path.islink(path):
+                yield path
+
 def is_pref_service(path, kb):
     # Standing prefs and services only. Mission-scoped kb/<mission>/prefs is not checked.
     if os.path.basename(path) == "INDEX.md":
@@ -379,7 +403,10 @@ elif not os.path.isfile(shared_path):
     emit("f", "fleet", f"missing {shared_path}")
 else:
     shared_text = open(shared_path, errors="ignore").read()
-    if fm_map(shared_path).get("status", "").lower() == "stub":
+    shared_fm = fm_map(shared_path)
+    if not shared_fm.get("status", "").strip():
+        emit("status", "fleet", "SHARED-SKILLS.md front matter has no status")
+    elif shared_fm.get("status", "").lower() == "stub":
         emit("stub", "fleet", "stub index, not seeded yet")
     dead_links(shared_text, os.path.dirname(shared_path), "fleet")
     recs = shared_records(shared_text)
@@ -424,9 +451,9 @@ for b in bots:
     got = fm_map(actions).get("type", "")
     if got != "actions-index":
         emit("type", slug, f"ACTIONS.md type is '{got or 'missing'}', expected actions-index")
-    dead_links(text, os.path.dirname(actions), slug)
+    dead_links(text, os.path.dirname(actions), slug, bot_root=botdir)
     kb = f"bots/{slug}/kb"
-    for f in sorted(glob.glob(f"{kb}/**/*.md", recursive=True)):
+    for f in sorted(iter_md(kb)):
         if not is_pref_service(f, kb):
             continue
         rel = os.path.relpath(f, kb).replace(os.sep, "/")
@@ -458,7 +485,10 @@ for b in bots:
             if skill_mentioned(name, text, slug):
                 continue
             emit("d", slug, f"skill `{name}` cited in {p} is not in ACTIONS.md")
-    if fm_map(actions).get("status", "").lower() == "stub":
+    action_status = fm_map(actions).get("status", "")
+    if not action_status.strip():
+        emit("status", slug, "ACTIONS.md front matter has no status")
+    elif action_status.lower() == "stub":
         emit("stub", slug, "stub index, not seeded yet")
     if recs:
         copies(slug, text, recs)
@@ -468,6 +498,6 @@ for b in bots:
 if all(v == 0 for v in counts.values()):
     print("check-actions: OK")
 else:
-    print("check-actions: " + " ".join(f"{k}={counts[k]}" for k in "a e b c d f g h i stub type folder".split()))
+    print("check-actions: " + " ".join(f"{k}={counts[k]}" for k in "a e b c d f g h i stub type folder status".split()))
 sys.exit(1 if failed else 0)
 PY
