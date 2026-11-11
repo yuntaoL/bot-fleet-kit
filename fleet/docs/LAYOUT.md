@@ -6,6 +6,7 @@ Permissions follow the folder structure. Each top-level tree has exactly one own
 bot-fleet/
 ├── README.md                     manager   fleet landing page (GitHub only renders a root README)
 ├── LICENSE                       manager
+├── .gitignore                    manager   root ignore rules (Python bytecode)
 ├── .github/workflows/            template  CI: validate.sh (GitHub requires this path)
 ├── examples/                     template  template repo ONLY (not copied to fleets); add-example.sh fetches from here
 ├── fleet/                        template  shared, upstream-owned, used as-is; changed ONLY by fleet/scripts/upgrade.sh

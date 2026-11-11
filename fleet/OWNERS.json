@@ -35,6 +35,10 @@
       "owner": "manager"
     },
     {
+      "path": ".gitignore",
+      "owner": "manager"
+    },
+    {
       "path": "README.md",
       "owner": "manager"
     },
