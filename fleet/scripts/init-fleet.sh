@@ -12,5 +12,6 @@ grep -qE '^# bot-fleet-(kit|template)$' README.md 2>/dev/null && cp $D/local/REA
 mkdir -p local/registry
 [ -f local/registry/INDEX.md ] || { cp $D/local/registry/INDEX.md local/registry/INDEX.md; echo "init: local/registry/INDEX.md"; }
 [ -f local/shared/INDEX.md ] || { cp $D/local/shared-INDEX.md local/shared/INDEX.md; echo "init: local/shared/INDEX.md"; }
+[ -f local/shared/SHARED-SKILLS.md ] || { cp $D/local/shared/SHARED-SKILLS.md local/shared/SHARED-SKILLS.md; echo "init: local/shared/SHARED-SKILLS.md"; }
 touch local/rules/.gitkeep local/shared/skills/.gitkeep
 [ -d examples ] && echo "note: examples/ is template-repo only (fleets fetch examples with add-example.sh); remove it by hand if unneeded: git rm -r examples" || true

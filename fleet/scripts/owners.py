@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """OWNERS.json engine shared by check-boundary.sh and validate.sh.
 usage: owners.py check   (reads `git diff --cached --name-status --no-renames` on stdin; env BOT_NAME, BOT_ROLE, BOT_RESTORE, BOT_FLEET_UPGRADE)
-       owners.py audit   (every tracked file has exactly one owner class)"""
+       owners.py audit   (every tracked file matches an owner; first glob wins)"""
 import json, os, re, subprocess, sys
 ROOT = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
 OWN = json.load(open(os.path.join(ROOT, "fleet/OWNERS.json")))["rules"]
@@ -20,6 +20,23 @@ def owner(path):
 def gcfg(k):
     try: return subprocess.check_output(["git", "config", "--get", k], text=True, cwd=ROOT).strip()
     except subprocess.CalledProcessError: return ""
+def fleet_role(slug):
+    if not slug: return ""
+    p = os.path.join(ROOT, "local/fleet.json")
+    if not os.path.exists(p): return ""
+    try: fl = json.load(open(p))
+    except Exception: return ""
+    for b in fl.get("bots", []):
+        if b.get("slug") == slug: return b.get("role") or ""
+    return ""
+def pristine_shared_skills():
+    """Staged local/shared/SHARED-SKILLS.md is the unmodified template stub."""
+    rel = "local/shared/SHARED-SKILLS.md"
+    tmpl = os.path.join(ROOT, "templates/local/shared/SHARED-SKILLS.md")
+    if not os.path.isfile(tmpl): return False
+    try: staged = subprocess.check_output(["git", "show", f":{rel}"], cwd=ROOT)
+    except subprocess.CalledProcessError: return False
+    return staged == open(tmpl, "rb").read()
 def check():
     role = os.environ.get("BOT_ROLE") or gcfg("fleet.role") or "worker"
     me = os.environ.get("BOT_NAME") or gcfg("fleet.bot")
@@ -35,6 +52,11 @@ def check():
         if rule is None: bad.append((path, "no owner in fleet/OWNERS.json")); continue
         o = rule["owner"]
         if o == "template": bad.append((path, "template-owned: changes only via scripts/upgrade.sh")); continue
+        if o == "builder":
+            if fleet_role(me) == "builder": continue
+            if role == "manager" and st == "A" and path == "local/shared/SHARED-SKILLS.md" and pristine_shared_skills(): continue
+            bad.append((path, "builder-owned shared skills index (the local/fleet.json builder, or upgrade.sh; the manager may only add the pristine template stub)"))
+            continue
         if o == "manager":
             if role != "manager": bad.append((path, "manager-owned")); continue
         elif o == "self":
@@ -50,9 +72,10 @@ def audit():
     files = subprocess.check_output(["git", "ls-files"], text=True, cwd=ROOT).split("\n")
     err = 0
     for f in filter(None, files):
-        m = [r["owner"] for x, r in RULES if x.match(f)]
-        if not m: err += 1; print(f"FAIL unowned path: {f}")
-        elif len(set(m)) > 1: err += 1; print(f"FAIL {f} matches several owner classes: {sorted(set(m))}")
+        hits = [r for x, r in RULES if x.match(f)]
+        if not hits: err += 1; print(f"FAIL unowned path: {f}")
+        # First matching glob wins. A later broader rule (local/** behind the
+        # shared-skills rule) is not a second owner.
     return err
 if __name__ == "__main__":
     if sys.argv[1] == "check": check()
