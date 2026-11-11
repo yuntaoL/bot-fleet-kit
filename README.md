@@ -98,7 +98,7 @@ The git side of both phases is tested end to end by `fleet/scripts/selftest.sh` 
 | Restore | `RESTORE.md` rebuilds the fleet from the repo; `RESTORE-BOT.md` + `snapshot-fleet.sh` roll one bot back | ✅ |
 | Knowledge base layout | `bots/<slug>/kb/` with `INDEX.md` and `ACTIONS.md`; fleet shared skills in `local/shared/SHARED-SKILLS.md` (read before each bot's action index; [KB-LAYOUT.md](fleet/docs/KB-LAYOUT.md)) | ✅ |
 | Template vs instance | Every change is classified first: generic changes go upstream, yours stay in `local/` and `bots/` ([CONTRIBUTING](fleet/docs/CONTRIBUTING.md)) | ✅ |
-| Shared skills | Hand-off, kb read/write, journal, notes publishing | 🧪 |
+| Proposed skill set | Hand-off, kb read/write, journal, notes publishing. The fleet's index of skills it actually uses is `local/shared/SHARED-SKILLS.md`, in the knowledge-base row above | 🧪 |
 | Two-level logs | One lean line per run in git; details on local disk, auto-cleaned | 🧪 |
 | Daily fast-forward | Builder routine that fast-forwards every worktree and reports anything dirty | 🧪 |
 

@@ -3,12 +3,15 @@
 # 0.11.0 action index and shared skills index. Read-only.
 # No local/fleet.json (the template repo): print a skip line and exit 0.
 # Non-retired bots in local/fleet.json:
-#   (a) FAIL if bots/<slug>/kb/ACTIONS.md is missing
-#   (e) FAIL if a row links to a path that does not exist (markdown links, and
-#       backticked paths ending .md/.json/.sh/.py/.yml). Relative to the file's
-#       directory first, then the repo root. Ignore http(s), anchors, ~/absolute
-#       paths, and env/secret names. A bare skill name is not a dead link.
-#   (b) WARN kb prefs/services not referenced (or covered by that folder's INDEX.md)
+#   (a) FAIL if bots/<slug>/kb/ACTIONS.md is missing and the bot folder exists.
+#       A fleet.json row with no folder yet (active or pre-fleet) only warns, even when strict.
+#   (e) FAIL if a row links to a path that does not exist (markdown links, reference-style
+#       links, and backticked paths ending .md/.json/.sh/.py/.yml). Resolve relative to the
+#       file's directory first, then the repo root, after %20 decoding. A realpath outside
+#       the repo is dead. Ignore http(s), anchors, ~/absolute paths, env/secret names,
+#       fenced code, and placeholders (<...> or kb/prefs/x.md). A symlinked ACTIONS.md or
+#       SHARED-SKILLS.md is a FAIL and is not read. A bare skill name is not a dead link.
+#   (b) WARN standing kb/me/prefs and kb/me/services files not referenced (or covered by that folder's INDEX.md)
 #   (c) WARN the bot's own skills not named in ACTIONS.md
 #   (d) WARN skills cited in rules.md, instructions.md, routine steps, or *.steps.md
 #       that ACTIONS.md does not mention
@@ -25,18 +28,33 @@
 #   (i) WARN if ACTIONS.md has no markdown link to the shared index
 # (a)(e)(f missing and dead links) fail immediately. (b)(c)(d)(g)(h)(i) and stubs warn.
 # BOT_FLEET_STRICT_ACTIONS=1 turns those warnings into failures.
-set -uo pipefail
-cd "$(git rev-parse --show-toplevel)"
+set -euo pipefail
+if ! root="$(git rev-parse --show-toplevel)"; then
+  echo "check-actions: not a git repo" >&2
+  exit 1
+fi
+cd "$root"
 python3 - <<'PY'
 import glob, json, os, re, sys
+from urllib.parse import unquote
 strict = os.environ.get("BOT_FLEET_STRICT_ACTIONS") == "1"
 library = os.environ.get("BOT_FLEET_SKILL_LIBRARY") or ""
 F = "local/fleet.json"
-counts = {k: 0 for k in "a e b c d f g h i stub".split()}
+counts = {k: 0 for k in "a e b c d f g h i stub type folder".split()}
 failed = False
 FAIL_KINDS = {"a", "e", "f"}
-WARN_KINDS = {"b", "c", "d", "g", "h", "i", "stub"}
-PREF_TYPES = {"pref", "prefs", "preference", "service", "services"}
+# folder stays a warning under strict: a roster row with no directory yet is not a failure
+WARN_KINDS = {"b", "c", "d", "g", "h", "i", "stub", "type"}
+ROOT = os.path.realpath(".")
+def symlink_part(rel):
+    acc = ""
+    for part in rel.strip("/").split("/"):
+        if not part:
+            continue
+        acc = part if not acc else acc + "/" + part
+        if os.path.islink(acc):
+            return acc
+    return ""
 
 def emit(kind, who, msg):
     global failed
@@ -70,34 +88,70 @@ def ignored(raw):
         return True
     return False
 
+def strip_fences(text):
+    return re.sub(r"(?s)```.*?```", "", text)
+
+def placeholder(path):
+    if "<" in path and ">" in path:
+        return True
+    return path.lstrip("./") in ("kb/prefs/x.md", "prefs/x.md")
+
+def inside_repo(path):
+    real = os.path.realpath(path)
+    try:
+        return os.path.commonpath([ROOT, real]) == ROOT
+    except ValueError:
+        return False
+
 def targets(text):
+    text = strip_fences(text)
     found = []
+    defs = {}
+    for m in re.finditer(r"(?m)^[ ]{0,3}\[([^\]]+)\]:[ \t]*(\S+)", text):
+        defs[m.group(1).strip().lower()] = m.group(2).strip()
+        found.append(m.group(2).strip())
     for m in re.finditer(r"\[[^\]]*\]\(([^)]+)\)", text):
         found.append(m.group(1).strip())
+    for m in re.finditer(r"\[([^\]]+)\]\[([^\]]*)\]", text):
+        key = (m.group(2) or m.group(1)).strip().lower()
+        if key in defs:
+            found.append(defs[key])
     for m in re.finditer(r"`([^`\n]+)`", text):
         inner = m.group(1).strip()
-        if re.search(r"\.(?:md|json|sh|py|yml)$", link_path(inner)):
+        path = unquote(link_path(inner))
+        if re.search(r"\.(?:md|json|sh|py|yml)$", path) or ("<" in path and ">" in path):
             found.append(inner)
     return found
 
-def path_exists(raw, base):
-    path = link_path(raw)
-    if os.path.exists(os.path.normpath(os.path.join(base, path))):
-        return True
-    if os.path.exists(os.path.normpath(path)):
-        return True
-    return False
+def link_state(raw, base):
+    """skip, ok, or dead. File directory first, then repo root. Outside the repo is dead."""
+    path = unquote(link_path(raw))
+    if not path or ignored(raw) or placeholder(path):
+        return "skip"
+    base_abs = base if os.path.isabs(base) else os.path.join(ROOT, base)
+    first = os.path.normpath(os.path.join(base_abs, path))
+    if not inside_repo(first):
+        return "dead"
+    if os.path.lexists(first):
+        return "ok"
+    second = os.path.normpath(os.path.join(ROOT, path))
+    if not inside_repo(second):
+        return "dead"
+    if os.path.lexists(second):
+        return "ok"
+    return "dead"
 
 def dead_links(text, base, who):
     seen = []
     for raw in targets(text):
-        if ignored(raw):
-            continue
-        path = link_path(raw)
+        path = unquote(link_path(raw))
         if path in seen:
             continue
-        if not path_exists(raw, base):
-            seen.append(path)
+        state = link_state(raw, base)
+        if state == "skip":
+            continue
+        seen.append(path)
+        if state == "dead":
             emit("e", who, f"dead link `{path}`")
 
 def fm_map(path):
@@ -198,8 +252,32 @@ def action_rows(text):
             out.append((get(ac), get(rc), get(hc)))
     return out
 
+def tied_skill_names(text):
+    """Skill names cited as skills, not label words and not a later unrelated backtick."""
+    names = []
+    for m in re.finditer(r"skills/([A-Za-z0-9_-]+)/SKILL\.md", text):
+        names.append(m.group(1))
+    for m in re.finditer(r"skills/([A-Za-z0-9_-]+)/", text):
+        names.append(m.group(1))
+    for line in text.splitlines():
+        for m in re.finditer(r"\bskills?\b", line, flags=re.I):
+            rest = line[m.end():]
+            pos = 0
+            first = True
+            while True:
+                if first:
+                    m2 = re.match(r"\s*`([A-Za-z0-9][A-Za-z0-9_-]*)`", rest[pos:])
+                else:
+                    m2 = re.match(r"\s*(?:,|\band\b|\bor\b)\s*`([A-Za-z0-9][A-Za-z0-9_-]*)`", rest[pos:], re.I)
+                if not m2:
+                    break
+                names.append(m2.group(1))
+                pos += m2.end()
+                first = False
+    return names
+
 def skill_mentioned(name, text, slug):
-    if re.search(r"(?<![A-Za-z0-9_-])" + re.escape(name) + r"(?![A-Za-z0-9_-])", text):
+    if any(n.lower() == name.lower() for n in tied_skill_names(text)):
         return True
     for p in (
         f"bots/{slug}/skills/{name}/SKILL.md",
@@ -222,23 +300,14 @@ def mentioned_rel(rel, text, slug):
     return False
 
 def is_pref_service(path, kb):
+    # Standing prefs and services only. Mission-scoped kb/<mission>/prefs is not checked.
     if os.path.basename(path) == "INDEX.md":
         return False
     rel = os.path.relpath(path, kb).replace(os.sep, "/")
-    parts = rel.split("/")
-    if "prefs" in parts[:-1] or "services" in parts[:-1]:
-        return True
-    return fm_map(path).get("type", "").lower() in PREF_TYPES
+    return rel.startswith("me/prefs/") or rel.startswith("me/services/")
 
 def cited_names(text):
-    names = []
-    for m in re.finditer(r"skills/([A-Za-z0-9_-]+)/SKILL\.md", text):
-        names.append(m.group(1))
-    for line in text.splitlines():
-        for m in re.finditer(r"\bskills?\b", line, flags=re.I):
-            rest = line[m.end():]
-            names.extend(re.findall(r"`([A-Za-z0-9][A-Za-z0-9_-]*)`", rest))
-    return names
+    return tied_skill_names(text)
 
 def load_steps(path):
     try:
@@ -303,7 +372,10 @@ except Exception as exc:
 
 shared_path = "local/shared/SHARED-SKILLS.md"
 shared_text, recs, listed = "", [], set()
-if not os.path.isfile(shared_path):
+shared_link = symlink_part(shared_path)
+if shared_link:
+    emit("e", "fleet", f"{shared_link} is a symlink")
+elif not os.path.isfile(shared_path):
     emit("f", "fleet", f"missing {shared_path}")
 else:
     shared_text = open(shared_path, errors="ignore").read()
@@ -336,11 +408,22 @@ for b in bots:
     slug = b.get("slug") or ""
     if not slug:
         continue
-    actions = f"bots/{slug}/kb/ACTIONS.md"
+    botdir = f"bots/{slug}"
+    if not os.path.isdir(botdir) or os.path.islink(botdir):
+        emit("folder", slug, f"no {botdir} yet (action index waits until the folder exists)")
+        continue
+    actions = f"{botdir}/kb/ACTIONS.md"
+    link = symlink_part(actions)
+    if link:
+        emit("e", slug, f"{link} is a symlink")
+        continue
     if not os.path.isfile(actions):
         emit("a", slug, f"missing {actions}")
         continue
     text = open(actions, errors="ignore").read()
+    got = fm_map(actions).get("type", "")
+    if got != "actions-index":
+        emit("type", slug, f"ACTIONS.md type is '{got or 'missing'}', expected actions-index")
     dead_links(text, os.path.dirname(actions), slug)
     kb = f"bots/{slug}/kb"
     for f in sorted(glob.glob(f"{kb}/**/*.md", recursive=True)):
@@ -385,6 +468,6 @@ for b in bots:
 if all(v == 0 for v in counts.values()):
     print("check-actions: OK")
 else:
-    print("check-actions: " + " ".join(f"{k}={counts[k]}" for k in "a e b c d f g h i stub".split()))
+    print("check-actions: " + " ".join(f"{k}={counts[k]}" for k in "a e b c d f g h i stub type folder".split()))
 sys.exit(1 if failed else 0)
 PY

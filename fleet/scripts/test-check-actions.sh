@@ -83,7 +83,7 @@ run "$CHECK"
 [ "$RC" = 0 ] || fail "stock stubs should warn, not fail"
 echo "$OUT" | grep -q '^WARN fleet: stub index, not seeded yet$' || fail "shared stub warn"
 echo "$OUT" | grep -q '^WARN ada: stub index, not seeded yet$' || fail "actions stub warn"
-echo "$OUT" | grep -q 'check-actions: a=0 e=0 b=0 c=0 d=0 f=0 g=0 h=0 i=0 stub=2' || fail "stub count: $OUT"
+echo "$OUT" | grep -q 'check-actions: a=0 e=0 b=0 c=0 d=0 f=0 g=0 h=0 i=0 stub=2 type=0 folder=0' || fail "stub count: $OUT"
 echo "$OUT" | grep -q '^FAIL' && fail "stock stubs produced a FAIL" || true
 pass "stock template: stub warns only (no dead links, shared skills listed)"
 
@@ -100,7 +100,7 @@ restore() {
   cp "$T/shared.seeded" "$REPO/local/shared/SHARED-SKILLS.md"
   cp "$T/actions.seeded" "$REPO/bots/ada/kb/ACTIONS.md"
   set_bots ada:worker
-  rm -rf "$REPO/bots/ada/kb/prefs" "$REPO/bots/ada/kb/notes" "$REPO/bots/ada/skills" "$REPO/bots/bee" "$REPO/bots/oldie" "$REPO/bots/newbot" "$REPO/bots/oldbot" "$REPO/local/shared/skills"
+  rm -rf "$REPO/bots/ada/kb/prefs" "$REPO/bots/ada/kb/notes" "$REPO/bots/ada/kb/me" "$REPO/bots/ada/kb/mission" "$REPO/bots/ada/skills" "$REPO/bots/bee" "$REPO/bots/oldie" "$REPO/bots/newbot" "$REPO/bots/oldbot" "$REPO/local/shared/skills"
   mkdir -p "$REPO/local/shared/skills"
   cp "$SRC/templates/bot/rules.md" "$REPO/bots/ada/rules.md"
   rm -f "$REPO/bots/ada/routines/"*.json "$REPO/bots/ada/routines/"*.steps.md 2>/dev/null || true
@@ -138,31 +138,37 @@ n="$(echo "$OUT" | grep -c '^FAIL ada: dead link' || true)"
 echo "$OUT" | grep -q 'purchases' && fail "bare skill name counted as a failure" || true
 pass "(e) dead links fail; http, ~, absolute, env, and bare skill name do not"
 
-# (b) unindexed pref by path and by front matter
+# (b) standing kb/me/prefs and kb/me/services only; mission-scoped prefs are not flagged
 restore
-mkdir -p "$REPO/bots/ada/kb/prefs" "$REPO/bots/ada/kb/notes"
-printf '%s\n' '---' 'type: pref' 'updated: 2026-11-11' '---' '# Hours' 'Example only.' > "$REPO/bots/ada/kb/prefs/hours.md"
+mkdir -p "$REPO/bots/ada/kb/me/prefs" "$REPO/bots/ada/kb/me/services" "$REPO/bots/ada/kb/mission/prefs" "$REPO/bots/ada/kb/prefs" "$REPO/bots/ada/kb/notes"
+printf '%s\n' '---' 'type: pref' 'updated: 2026-11-11' '---' '# Hours' 'Example only.' > "$REPO/bots/ada/kb/me/prefs/hours.md"
+printf '%s\n' '---' 'type: service' 'updated: 2026-11-11' '---' '# Inbox' 'Example only.' > "$REPO/bots/ada/kb/me/services/inbox.md"
+printf '%s\n' '---' 'type: pref' 'updated: 2026-11-11' '---' '# Job' 'Example only.' > "$REPO/bots/ada/kb/mission/prefs/job.md"
+printf '%s\n' '---' 'type: pref' 'updated: 2026-11-11' '---' '# Other' 'Example only.' > "$REPO/bots/ada/kb/prefs/hours.md"
 printf '%s\n' '---' 'type: preference' 'updated: 2026-11-11' '---' '# Likes' 'Example only.' > "$REPO/bots/ada/kb/notes/likes.md"
 run "$CHECK"
 [ "$RC" = 0 ] || fail "unindexed pref should warn, not fail: $OUT"
-echo "$OUT" | grep -q '^WARN ada: unindexed pref prefs/hours.md$' || fail "path pref: $OUT"
-echo "$OUT" | grep -q '^WARN ada: unindexed pref notes/likes.md$' || fail "front-matter pref: $OUT"
+echo "$OUT" | grep -q '^WARN ada: unindexed pref me/prefs/hours.md$' || fail "standing pref: $OUT"
+echo "$OUT" | grep -q '^WARN ada: unindexed pref me/services/inbox.md$' || fail "standing service: $OUT"
+echo "$OUT" | grep -q 'mission/prefs' && fail "mission-scoped pref was flagged: $OUT" || true
+echo "$OUT" | grep -q 'unindexed pref prefs/hours.md' && fail "top-level prefs was flagged: $OUT" || true
+echo "$OUT" | grep -q 'notes/likes.md' && fail "front-matter outside me/ was flagged: $OUT" || true
 run env BOT_FLEET_STRICT_ACTIONS=1 "$CHECK"
 [ "$RC" != 0 ] || fail "strict pref should fail"
-echo "$OUT" | grep -q '^FAIL ada: unindexed pref prefs/hours.md$' || fail "strict prefix: $OUT"
-pass "(b) unindexed pref warns, and fails when strict"
+echo "$OUT" | grep -q '^FAIL ada: unindexed pref me/prefs/hours.md$' || fail "strict prefix: $OUT"
+pass "(b) standing me/prefs and me/services warn; mission-scoped prefs do not"
 
 # INDEX.md of the same folder covers the file
-printf '%s\n' '---' 'type: index' 'updated: 2026-11-11' '---' '# prefs' > "$REPO/bots/ada/kb/prefs/INDEX.md"
+printf '%s\n' '---' 'type: index' 'updated: 2026-11-11' '---' '# prefs' > "$REPO/bots/ada/kb/me/prefs/INDEX.md"
 python3 - <<PY
 from pathlib import Path
 p = Path("$REPO/bots/ada/kb/ACTIONS.md")
-t = p.read_text().replace("| calendar |", "| calendar | \`prefs/INDEX.md\`, ", 1)
+t = p.read_text().replace("| calendar |", "| calendar | \`me/prefs/INDEX.md\`, ", 1)
 p.write_text(t)
 PY
 run "$CHECK"
-echo "$OUT" | grep -q 'prefs/hours.md' && fail "INDEX coverage missed: $OUT" || true
-echo "$OUT" | grep -q 'notes/likes.md' || fail "other folder still unindexed: $OUT"
+echo "$OUT" | grep -q 'me/prefs/hours.md' && fail "INDEX coverage missed: $OUT" || true
+echo "$OUT" | grep -q 'me/services/inbox.md' || fail "other standing folder still unindexed: $OUT"
 pass "(b) a referenced folder INDEX covers that folder"
 
 # (c) unindexed own skill
@@ -342,6 +348,101 @@ run "$CHECK"
 mv "$T/fleet.json" "$REPO/local/fleet.json"
 pass "retired bot skipped; no fleet.json skips"
 
+# S2: placeholders, fences, reference links, %20, and a path that leaves the repo
+restore
+mkdir -p "$REPO/bots/ada/kb"
+printf '%s\n' '---' 'type: note' '---' '# spaced' > "$REPO/bots/ada/kb/note file.md"
+python3 - "$REPO" <<'PY'
+import os, pathlib, sys
+repo = sys.argv[1]
+p = pathlib.Path(repo) / "bots/ada/kb/ACTIONS.md"
+rel = os.path.relpath("/etc/passwd", str(p.parent))
+extra = """
+```
+[fenced](prefs/fenced-missing.md)
+`kb/prefs/x.md`
+```
+See [missing][ref].
+[ref]: prefs/ref-missing.md
+Also [spaced](note%20file.md), `kb/prefs/x.md`, `skills/<n>/SKILL.md`, and `bots/<slug>/kb/INDEX.md`.
+And [escape](REL).
+""".replace("REL", rel)
+p.write_text(p.read_text() + extra)
+PY
+run "$CHECK"
+[ "$RC" != 0 ] || fail "escaping link should fail"
+echo "$OUT" | grep -q 'dead link `prefs/ref-missing.md`' || fail "reference link: $OUT"
+echo "$OUT" | grep -q 'fenced-missing' && fail "fenced link was checked: $OUT" || true
+echo "$OUT" | grep -q 'kb/prefs/x.md' && fail "placeholder x.md was a dead link: $OUT" || true
+echo "$OUT" | grep -q 'skills/<n>' && fail "angle-bracket placeholder was a dead link: $OUT" || true
+echo "$OUT" | grep -q 'note%20file.md' && fail "%20 was not decoded: $OUT" || true
+echo "$OUT" | grep -q 'etc/passwd' || fail "path outside the repo was not dead: $OUT"
+pass "S2 placeholders, fences, reference links, %20, and paths outside the repo"
+
+# symlinked indexes are failures and are not read
+restore
+rm "$REPO/bots/ada/kb/ACTIONS.md"
+ln -s /etc/passwd "$REPO/bots/ada/kb/ACTIONS.md"
+run "$CHECK"
+[ "$RC" != 0 ] || fail "symlinked ACTIONS should fail"
+echo "$OUT" | grep -q 'ACTIONS.md is a symlink' || fail "symlink message: $OUT"
+echo "$OUT" | grep -q 'root:' && fail "symlink target was read: $OUT" || true
+rm "$REPO/bots/ada/kb/ACTIONS.md"
+cp "$T/actions.seeded" "$REPO/bots/ada/kb/ACTIONS.md"
+rm "$REPO/local/shared/SHARED-SKILLS.md"
+ln -s /etc/passwd "$REPO/local/shared/SHARED-SKILLS.md"
+run "$CHECK"
+[ "$RC" != 0 ] || fail "symlinked shared index should fail"
+echo "$OUT" | grep -q 'local/shared/SHARED-SKILLS.md is a symlink' || fail "shared symlink: $OUT"
+rm "$REPO/local/shared/SHARED-SKILLS.md"
+cp "$T/shared.seeded" "$REPO/local/shared/SHARED-SKILLS.md"
+pass "S2 symlinked ACTIONS.md and SHARED-SKILLS.md fail and are not read"
+
+# wrong front matter type warns
+restore
+python3 - <<PY
+from pathlib import Path
+p = Path("$REPO/bots/ada/kb/ACTIONS.md")
+p.write_text(p.read_text().replace("type: actions-index", "type: index", 1))
+PY
+run "$CHECK"
+[ "$RC" = 0 ] || fail "wrong type should warn: $OUT"
+echo "$OUT" | grep -q "ACTIONS.md type is 'index', expected actions-index" || fail "type warn: $OUT"
+run env BOT_FLEET_STRICT_ACTIONS=1 "$CHECK"
+[ "$RC" != 0 ] || fail "strict type should fail"
+pass "ACTIONS.md type other than actions-index warns"
+
+# S3: a roster row with no folder yet does not fail validate
+restore
+set_bots ada:worker ghost:worker:pre-fleet later:worker
+run "$CHECK"
+[ "$RC" = 0 ] || fail "missing folder should not fail: $OUT"
+echo "$OUT" | grep -q '^WARN ghost: no bots/ghost yet' || fail "pre-fleet warn: $OUT"
+echo "$OUT" | grep -q '^WARN later: no bots/later yet' || fail "active-without-folder warn: $OUT"
+run env BOT_FLEET_STRICT_ACTIONS=1 "$CHECK"
+[ "$RC" = 0 ] || fail "strict still failed a missing folder: $OUT"
+echo "$OUT" | grep -q '^FAIL ghost:' && fail "strict promoted a missing folder: $OUT" || true
+pass "S3 missing bot folder warns and does not fail, even when strict"
+
+# S4: the action label 'vault' does not index a vault skill; `sync` after skill \`name\` is not a skill
+restore
+mkdir -p "$REPO/bots/ada/skills/vault"
+printf '%s\n' '---' 'name: vault' '---' '# Example' > "$REPO/bots/ada/skills/vault/SKILL.md"
+run "$CHECK"
+echo "$OUT" | grep -q '^WARN ada: unindexed skill vault$' || fail "vault label hid the skill: $OUT"
+printf '\nUse skill `purchases` then save with `sync`.\n' >> "$REPO/bots/ada/rules.md"
+python3 - <<PY
+from pathlib import Path
+p = Path("$REPO/bots/ada/kb/ACTIONS.md")
+t = p.read_text().replace("skill \`fleet-change\`", "skill \`purchases\`, skill \`fleet-change\`", 1)
+p.write_text(t)
+PY
+run env BOT_FLEET_STRICT_ACTIONS=1 "$CHECK"
+echo "$OUT" | grep -q 'skill `sync`' && fail "sync was treated as a skill: $OUT" || true
+echo "$OUT" | grep -q 'skill `purchases`' && fail "indexed purchases was still cited: $OUT" || true
+echo "$OUT" | grep -q 'unindexed skill vault' || fail "vault still hidden under strict: $OUT"
+pass "S4 vault label does not hide a vault skill; sync is not a cited skill"
+
 # migration: create missing stubs, never overwrite, second run is a no-op
 mkdir -p "$REPO/bots/newbot/kb" "$REPO/bots/oldbot/kb" "$REPO/bots/oldie/kb"
 printf 'custom oldbot actions, leave me\n' > "$REPO/bots/oldbot/kb/ACTIONS.md"
@@ -372,6 +473,41 @@ cmp -s "$REPO/templates/local/shared/SHARED-SKILLS.md" "$REPO/local/shared/SHARE
 run bash "$MIG"
 [ -z "$OUT" ] || fail "migration not a no-op after shared seed: $OUT"
 pass "migration seeds missing stubs, leaves existing bytes, second run is a no-op"
+
+# F3: a committed symlinked kb and a symlinked local/shared are not written through
+SYM="$T/symrepo"
+mkdir -p "$SYM/templates/bot/kb" "$SYM/templates/local/shared" "$SYM/bots/real/kb" "$SYM/bots/linkbot" "$T/outside-kb" "$T/outside-shared"
+cp "$SRC/templates/bot/kb/ACTIONS.md" "$SYM/templates/bot/kb/ACTIONS.md"
+cp "$SRC/templates/local/shared/SHARED-SKILLS.md" "$SYM/templates/local/shared/SHARED-SKILLS.md"
+ln -s "$T/outside-kb" "$SYM/bots/linkbot/kb"
+ln -s "$T/outside-shared" "$SYM/local-shared-link"
+mkdir -p "$SYM/local"
+# local/shared itself is the symlink the migration must refuse
+ln -s "$T/outside-shared" "$SYM/local/shared"
+python3 - "$SYM" <<'PY'
+import json, sys
+root = sys.argv[1]
+json.dump({"schemaVersion": 2, "owner": "sam", "owner_name": "Sam Example", "templateVersion": "0.11.0",
+           "bots": [{"slug": "linkbot", "name": "Linkbot", "id": "id-linkbot", "role": "worker", "status": "active"},
+                    {"slug": "real", "name": "Real", "id": "id-real", "role": "worker", "status": "active"}]},
+          open(root + "/local/fleet.json", "w"), indent=2)
+PY
+git init -q -b main "$SYM"
+git -C "$SYM" config user.email test@example.invalid
+git -C "$SYM" config user.name test
+git -C "$SYM" add -A
+git -C "$SYM" commit -qm "symlinks" --no-verify
+set +e
+sym_out="$(cd "$SYM" && bash "$MIG" 2>&1)"
+sym_rc=$?
+set -e
+[ "$sym_rc" != 0 ] || fail "migration followed a symlink: $sym_out"
+echo "$sym_out" | grep -q 'is a symlink' || fail "migration symlink error: $sym_out"
+[ ! -e "$T/outside-kb/ACTIONS.md" ] || fail "migration wrote through the kb symlink"
+[ ! -e "$T/outside-shared/SHARED-SKILLS.md" ] || fail "migration wrote through the local/shared symlink"
+# the safe bot still receives a stub; the bad paths do not make the whole run a silent success
+[ -f "$SYM/bots/real/kb/ACTIONS.md" ] || fail "migration skipped a safe bot"
+pass "F3 migration refuses a symlinked kb and a symlinked local/shared"
 
 # Ownership: builder may commit the shared index; worker and manager may not edit it; upgrade may.
 # Manager may add the pristine template stub (bootstrap).
@@ -442,6 +578,78 @@ commit_as manager ada "ada: add stub"
 [ "$RC" = 0 ] || fail "manager add of the pristine stub was rejected: $OUT"
 pass "manager may add the pristine template stub; a worker may not"
 
+# F1a: an unstaged role flip does not authorize a worker
+python3 - "$REPO/local/fleet.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+fl = json.load(open(p))
+for b in fl["bots"]:
+    if b["slug"] == "pip":
+        b["role"] = "builder"
+json.dump(fl, open(p, "w"), indent=2)
+open(p, "a").write("\n")
+PY
+echo 'worker via dirty roster' >> "$REPO/local/shared/SHARED-SKILLS.md"
+git -C "$REPO" add -- local/shared/SHARED-SKILLS.md
+commit_as worker pip "pip: shared index"
+[ "$RC" != 0 ] || fail "unstaged role flip authorized a worker"
+echo "$OUT" | grep -q 'builder-owned' || fail "F1a rejection: $OUT"
+git -C "$REPO" reset -q --hard HEAD
+pass "F1a unstaged role flip cannot commit SHARED-SKILLS.md"
+
+# F1b: a dirty working-tree template is not the pristine stub
+git -C "$REPO" rm -q local/shared/SHARED-SKILLS.md
+OUT="$(cd "$REPO" && BOT_FLEET_UPGRADE=1 BOT_ROLE=manager git commit -qm "upgrade: drop for pristine attack" 2>&1)" && RC=0 || RC=$?
+[ "$RC" = 0 ] || fail "could not drop the index: $OUT"
+printf 'ARBITRARY TEMPLATE BYTES\n' > "$REPO/templates/local/shared/SHARED-SKILLS.md"
+printf 'ARBITRARY TEMPLATE BYTES\n' > "$REPO/local/shared/SHARED-SKILLS.md"
+git -C "$REPO" add -- local/shared/SHARED-SKILLS.md
+commit_as manager ada "ada: fake pristine"
+[ "$RC" != 0 ] || fail "dirty template authorized arbitrary bytes"
+echo "$OUT" | grep -q 'builder-owned' || fail "F1b rejection: $OUT"
+git -C "$REPO" reset -q --hard HEAD
+git -C "$REPO" checkout -q -- templates/local/shared/SHARED-SKILLS.md
+cp "$SRC/templates/local/shared/SHARED-SKILLS.md" "$REPO/local/shared/SHARED-SKILLS.md"
+git -C "$REPO" add -- local/shared/SHARED-SKILLS.md
+OUT="$(cd "$REPO" && BOT_FLEET_UPGRADE=1 BOT_NAME=ada BOT_ROLE=manager git commit -qm "upgrade: restore stub" 2>&1)" && RC=0 || RC=$?
+[ "$RC" = 0 ] || fail "could not restore the stub: $OUT"
+pass "F1b a dirty working-tree template cannot make arbitrary bytes pristine"
+
+# S1: a retired builder is blocked. Status is read from HEAD, so commit the roster first.
+python3 - "$REPO/local/fleet.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+fl = json.load(open(p))
+for b in fl["bots"]:
+    if b["slug"] == "forge":
+        b["status"] = "retired"
+json.dump(fl, open(p, "w"), indent=2)
+open(p, "a").write("\n")
+PY
+git -C "$REPO" add -- local/fleet.json
+commit_as manager ada "ada: retire forge"
+[ "$RC" = 0 ] || fail "manager could not retire forge: $OUT"
+echo 'retired builder edit' >> "$REPO/local/shared/SHARED-SKILLS.md"
+git -C "$REPO" add -- local/shared/SHARED-SKILLS.md
+commit_as builder forge "forge: shared index"
+[ "$RC" != 0 ] || fail "retired builder was allowed to commit"
+echo "$OUT" | grep -q 'builder-owned' || fail "S1 rejection: $OUT"
+git -C "$REPO" reset -q --hard HEAD
+python3 - "$REPO/local/fleet.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+fl = json.load(open(p))
+for b in fl["bots"]:
+    if b["slug"] == "forge":
+        b["status"] = "active"
+json.dump(fl, open(p, "w"), indent=2)
+open(p, "a").write("\n")
+PY
+git -C "$REPO" add -- local/fleet.json
+commit_as manager ada "ada: restore forge"
+[ "$RC" = 0 ] || fail "manager could not restore forge: $OUT"
+pass "S1 a retired builder cannot commit the shared index"
+
 # sync.sh: a manager's default local/ add must not take the shared index.
 # The shared edit stays unstaged, so rebase refuses to push (existing sync rule).
 # The commit itself is only the manager's other local file.
@@ -457,5 +665,38 @@ run env BOT_NAME=forge BOT_ROLE=builder "$REPO/fleet/scripts/sync.sh" "forge: sh
 [ "$RC" = 0 ] || fail "builder sync failed: $OUT"
 git -C "$REPO" show --name-only --format= HEAD | grep -q '^local/shared/SHARED-SKILLS.md$' || fail "builder sync did not commit the index: $OUT"
 pass "sync.sh: builder stages the shared index; manager default sync does not"
+
+# S5: two owner classes fail audit, except the documented shared-skills path
+AUDIT="$T/auditrepo"
+mkdir -p "$AUDIT/fleet/scripts" "$AUDIT/local/shared" "$AUDIT/local"
+cp "$SRC/fleet/scripts/owners.py" "$AUDIT/fleet/scripts/owners.py"
+cp "$SRC/fleet/OWNERS.json" "$AUDIT/fleet/OWNERS.json"
+printf 'index\n' > "$AUDIT/local/shared/SHARED-SKILLS.md"
+printf 'note\n' > "$AUDIT/local/overrides.md"
+git init -q -b main "$AUDIT"
+git -C "$AUDIT" config user.email test@example.invalid
+git -C "$AUDIT" config user.name test
+git -C "$AUDIT" add -A
+git -C "$AUDIT" commit -qm "audit base" --no-verify
+(cd "$AUDIT" && python3 fleet/scripts/owners.py audit) || fail "documented shared-skills overlap should pass audit"
+python3 - "$AUDIT/fleet/OWNERS.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+own = json.load(open(p))
+own["rules"].insert(0, {"path": "local/extra.md", "owner": "template"})
+json.dump(own, open(p, "w"), indent=2)
+open(p, "a").write("\n")
+PY
+printf 'extra\n' > "$AUDIT/local/extra.md"
+git -C "$AUDIT" add -A
+git -C "$AUDIT" commit -qm "overlap" --no-verify
+set +e
+audit_out="$(cd "$AUDIT" && python3 fleet/scripts/owners.py audit 2>&1)"
+audit_rc=$?
+set -e
+[ "$audit_rc" != 0 ] || fail "overlapping owners were not caught"
+echo "$audit_out" | grep -q 'local/extra.md matches several owner classes' || fail "S5 message: $audit_out"
+echo "$audit_out" | grep -q 'SHARED-SKILLS.md matches several' && fail "exception path was flagged: $audit_out" || true
+pass "S5 audit fails two owner classes, except SHARED-SKILLS.md"
 
 echo "test-check-actions: OK"

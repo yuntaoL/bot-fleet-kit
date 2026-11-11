@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
 """OWNERS.json engine shared by check-boundary.sh and validate.sh.
 usage: owners.py check   (reads `git diff --cached --name-status --no-renames` on stdin; env BOT_NAME, BOT_ROLE, BOT_RESTORE, BOT_FLEET_UPGRADE)
-       owners.py audit   (every tracked file matches an owner; first glob wins)"""
+       owners.py audit   (every tracked file matches an owner; two owner classes fail, except MULTI_OWNER_OK)
+
+Role and the pristine shared-skills stub are read from git (HEAD or the index), never the working tree.
+A builder may change local/shared/SHARED-SKILLS.md only when HEAD:local/fleet.json gives that slug role
+builder and a status other than retired or paused.
+"""
 import json, os, re, subprocess, sys
 ROOT = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
 OWN = json.load(open(os.path.join(ROOT, "fleet/OWNERS.json")))["rules"]
+# First match wins at commit time. Audit still fails when one tracked path matches two owner
+# classes, except these paths, where a narrower rule intentionally shadows a later broader one.
+MULTI_OWNER_OK = {
+    "local/shared/SHARED-SKILLS.md",  # builder, then local/**
+}
 def rx(g):
     out = ""; i = 0
     while i < len(g):
@@ -20,23 +30,29 @@ def owner(path):
 def gcfg(k):
     try: return subprocess.check_output(["git", "config", "--get", k], text=True, cwd=ROOT).strip()
     except subprocess.CalledProcessError: return ""
-def fleet_role(slug):
-    if not slug: return ""
-    p = os.path.join(ROOT, "local/fleet.json")
-    if not os.path.exists(p): return ""
-    try: fl = json.load(open(p))
-    except Exception: return ""
+def git_bytes(spec):
+    try: return subprocess.check_output(["git", "show", spec], cwd=ROOT)
+    except subprocess.CalledProcessError: return None
+def fleet_record(slug):
+    """Bot row from HEAD:local/fleet.json. An unstaged or uncommitted edit does not count."""
+    if not slug: return None
+    raw = git_bytes("HEAD:local/fleet.json")
+    if raw is None: return None
+    try: fl = json.loads(raw.decode())
+    except Exception: return None
     for b in fl.get("bots", []):
-        if b.get("slug") == slug: return b.get("role") or ""
-    return ""
+        if b.get("slug") == slug: return b
+    return None
+def active_builder(slug):
+    b = fleet_record(slug)
+    if not b or b.get("role") != "builder": return False
+    return (b.get("status") or "active") not in ("retired", "paused")
 def pristine_shared_skills():
-    """Staged local/shared/SHARED-SKILLS.md is the unmodified template stub."""
-    rel = "local/shared/SHARED-SKILLS.md"
-    tmpl = os.path.join(ROOT, "templates/local/shared/SHARED-SKILLS.md")
-    if not os.path.isfile(tmpl): return False
-    try: staged = subprocess.check_output(["git", "show", f":{rel}"], cwd=ROOT)
-    except subprocess.CalledProcessError: return False
-    return staged == open(tmpl, "rb").read()
+    """Staged local/shared/SHARED-SKILLS.md equals HEAD's template, not the working tree."""
+    staged = git_bytes(":local/shared/SHARED-SKILLS.md")
+    head = git_bytes("HEAD:templates/local/shared/SHARED-SKILLS.md")
+    if staged is None or head is None: return False
+    return staged == head
 def check():
     role = os.environ.get("BOT_ROLE") or gcfg("fleet.role") or "worker"
     me = os.environ.get("BOT_NAME") or gcfg("fleet.bot")
@@ -53,9 +69,9 @@ def check():
         o = rule["owner"]
         if o == "template": bad.append((path, "template-owned: changes only via scripts/upgrade.sh")); continue
         if o == "builder":
-            if fleet_role(me) == "builder": continue
+            if active_builder(me): continue
             if role == "manager" and st == "A" and path == "local/shared/SHARED-SKILLS.md" and pristine_shared_skills(): continue
-            bad.append((path, "builder-owned shared skills index (the local/fleet.json builder, or upgrade.sh; the manager may only add the pristine template stub)"))
+            bad.append((path, "builder-owned shared skills index (HEAD fleet.json: active builder, or upgrade.sh; the manager may only add the pristine template stub)"))
             continue
         if o == "manager":
             if role != "manager": bad.append((path, "manager-owned")); continue
@@ -73,9 +89,11 @@ def audit():
     err = 0
     for f in filter(None, files):
         hits = [r for x, r in RULES if x.match(f)]
-        if not hits: err += 1; print(f"FAIL unowned path: {f}")
-        # First matching glob wins. A later broader rule (local/** behind the
-        # shared-skills rule) is not a second owner.
+        if not hits:
+            err += 1; print(f"FAIL unowned path: {f}"); continue
+        owners = sorted({r["owner"] for r in hits})
+        if len(owners) > 1 and f not in MULTI_OWNER_OK:
+            err += 1; print(f"FAIL {f} matches several owner classes: {owners}")
     return err
 if __name__ == "__main__":
     if sys.argv[1] == "check": check()

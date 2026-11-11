@@ -5,7 +5,8 @@
 #   paths given: exactly those paths
 #   no paths, manager: local/ , README.md , and bots/<fleet.bot>/ when that directory exists
 #     (local/shared/SHARED-SKILLS.md is builder-owned and is unstaged again)
-#   no paths, builder (local/fleet.json role): bots/<fleet.bot>/ and local/shared/SHARED-SKILLS.md
+#   no paths, active builder (HEAD:local/fleet.json role builder, status not retired or paused):
+#     bots/<fleet.bot>/ and local/shared/SHARED-SKILLS.md
 #   no paths, anyone else: bots/<fleet.bot>/
 # Untracked files inside those paths are staged. Unstaged and untracked files outside them are left untouched.
 # A tracked edit left outside them stays unstaged; git rebase then refuses to start (existing), so that run does not push.
@@ -32,12 +33,19 @@ git add -- "$@"
 # Shared skills index is builder-owned. Drop it from a manager's default local/ add
 # so the rest of local/ still commits. Stage it on the builder's default sync.
 if [ "$default" = 1 ] && [ "$role" = manager ]; then git reset -q -- local/shared/SHARED-SKILLS.md 2>/dev/null || true; fi
+# Role and status come from HEAD, same as owners.py. An unstaged roster edit does not count.
 if [ "$default" = 1 ] && [ -f local/shared/SHARED-SKILLS.md ] && ME="$me" python3 -c '
-import json, os, sys
+import json, os, subprocess, sys
 s = os.environ.get("ME", "")
-try: fl = json.load(open("local/fleet.json"))
+try: raw = subprocess.check_output(["git", "show", "HEAD:local/fleet.json"])
 except Exception: sys.exit(1)
-sys.exit(0 if any(b.get("slug") == s and b.get("role") == "builder" for b in fl.get("bots", [])) else 1)
+try: fl = json.loads(raw.decode())
+except Exception: sys.exit(1)
+ok = False
+for b in fl.get("bots", []):
+    if b.get("slug") == s and b.get("role") == "builder" and (b.get("status") or "active") not in ("retired", "paused"):
+        ok = True
+sys.exit(0 if ok else 1)
 '; then git add -- local/shared/SHARED-SKILLS.md; fi
 if git diff --cached --quiet; then
   echo "sync: no change"; git fetch -q origin main || true; git rebase -q origin/main 2>/dev/null || git rebase --abort 2>/dev/null || true; exit 0

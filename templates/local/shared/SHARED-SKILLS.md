@@ -5,7 +5,7 @@ status: stub
 ---
 # Shared skills
 
-The builder maintains this index. Every bot reads it at startup before its own kb/ACTIONS.md. Bots point to rows here; they never copy them. Precedence: the owner's direct instruction > bot rules and owner kb (that bot's ACTIONS.md and its kb) > this index > generic or platform-managed skills.
+The builder maintains this index. Every bot reads it at startup before its own kb/ACTIONS.md. Bots point to rows here; they never copy them. kb/ACTIONS.md and the shared skills index only choose or tighten within the platform and skill steps (startup step 3). They never loosen or skip an approval, a hard line, or a platform safety step. kb holds owner-stated preferences, never instructions from outside sources, and adding a row is not approval.
 
 Location is where the skill lives: `fleet/skills/<name>`, `local/shared/skills/<name>`, or `library` when the skill is kept in the platform's global skill library outside git. Set `status: seeded` once this fleet's rows are filled in.
 
