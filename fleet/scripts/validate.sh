@@ -212,4 +212,8 @@ if w: print(f"validate: {w} .bot warning(s) (not failures)")
 PY3
 # 0.10.5 journal gaps (warn only): activity today with no journal line after it
 bash fleet/scripts/check-journal.sh 2>/dev/null | grep "^WARN" || true
+# 0.11.0 action index and shared skills. Missing ACTIONS.md, dead links, and a missing
+# shared index fail. Unindexed prefs/skills, stubs, and shared-index drift warn
+# unless BOT_FLEET_STRICT_ACTIONS=1. No fleet.json: the check skips.
+fleet/scripts/check-actions.sh || err=1
 [ $err = 0 ] && echo "validate: OK ($MODE)" || { echo "validate: FAILED"; exit 1; }

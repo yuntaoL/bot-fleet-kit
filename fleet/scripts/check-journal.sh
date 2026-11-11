@@ -45,7 +45,7 @@ for b in json.load(open(F)).get("bots",[]):
             jt=max(jt or 0, lt)
     # a minute of slack: a journal line written in the same sync as the work counts
     if jt is None or act>jt+60:
-        gaps+=1; print(f"WARN {s}: activity at {fmt(act)} ({src}) but last journal line {fmt(jt)} on {day} (per-turn journal rule, startup.md step 5)")
+        gaps+=1; print(f"WARN {s}: activity at {fmt(act)} ({src}) but last journal line {fmt(jt)} on {day} (per-turn journal rule, startup.md step 6)")
 print(f"check-journal: {gaps} gap(s) on {day}" if gaps else f"check-journal: OK ({day})")
 sys.exit(1 if strict and gaps else 0)
 PY

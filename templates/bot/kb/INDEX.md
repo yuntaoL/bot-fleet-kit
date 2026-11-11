@@ -7,3 +7,4 @@ Read INDEX → sub-INDEX → file. One topic per file, YAML front matter (`type,
 
 | Path | What |
 |---|---|
+| `ACTIONS.md` | action index: kb files and skills to read before each outside action |

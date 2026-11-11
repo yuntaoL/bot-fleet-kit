@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: fleet/scripts/create-bot.sh <slug> [--worktree-base DIR]     (builder or manager; 0.10.5+)
 # Git side of creating a bot whose row the manager already added to local/fleet.json (slug, name, id, role, status):
-# copies templates/bot to bots/<slug>/ (drops the example routine), generates bots/<slug>/bot.json (bot-json.sh)
+# copies templates/bot to bots/<slug>/ (drops the example routine; the copy includes kb/ACTIONS.md), generates bots/<slug>/bot.json (bot-json.sh)
 # renders bots/<slug>/THIN-PROMPT.md (render-prompt.sh) and writes <worktree>/.bot (bot-pointer.sh) if the worktree exists. Commits nothing; review, then sync.sh "add <slug>" bots/<slug>/.
 # Creating the platform bot and pasting the prompt stay manual, with the owner's yes.
 set -euo pipefail

@@ -6,6 +6,7 @@ Permissions follow the folder structure. Each top-level tree has exactly one own
 bot-fleet/
 ├── README.md                     manager   fleet landing page (GitHub only renders a root README)
 ├── LICENSE                       manager
+├── .gitignore                    manager   root ignore rules (Python bytecode)
 ├── .github/workflows/            template  CI: validate.sh (GitHub requires this path)
 ├── examples/                     template  template repo ONLY (not copied to fleets); add-example.sh fetches from here
 ├── fleet/                        template  shared, upstream-owned, used as-is; changed ONLY by fleet/scripts/upgrade.sh
@@ -14,7 +15,7 @@ bot-fleet/
 │   ├── roles/                    manager.md builder.md worker.md (used directly, never copied)
 │   ├── skills/                   fleet skills (fleet-change, …)
 │   ├── docs/  schema/            documentation; JSON Schemas
-│   ├── scripts/                  bootstrap, worktree, sync, upgrade, validate, audit, check-staged-config, compat, owners.py, schema_check.py, …
+│   ├── scripts/                  bootstrap, worktree, sync, upgrade, validate, audit, check-actions, check-staged-config, compat, owners.py, schema_check.py, …
 │   └── migrations/               <version>.sh, idempotent
 ├── .bot                          untracked, per worktree (0.10.5+): one line bots/<slug>/bot.json; how a bot finds itself
 ├── templates/                    template  placeholder/starter files only
@@ -26,12 +27,14 @@ bot-fleet/
 │   ├── overrides.md              human-approved deviations from common.md
 │   ├── rules/*.md                fleet-specific rule additions (read every run)
 │   ├── roles/<role>.md           optional additions to fleet/roles/<role>.md
-│   ├── registry/  shared/        bot cards; shared data (state/, skills/, scripts/, …)
+│   ├── registry/                 bot cards
+│   ├── shared/                   shared data (state/, skills/, scripts/, …)
+│   │   └── SHARED-SKILLS.md      builder   fleet shared skills index (not the rest of local/)
 │   └── CHANGELOG.md              fleet history
 └── bots/<slug>/                  self      only bot <slug> (manager/builder may only ADD files)
     ├── bot.json                  identity + environment (0.10.5+): the one copy prompts and routines read
     ├── profile.json  instructions.md  rules.md  memory.md  state.json  secrets.md
-    ├── routines/  skills/  journal/
+    ├── routines/  skills/  journal/  kb/INDEX.md  kb/ACTIONS.md
     └── <anything new>            no permission change needed
 ```
 
@@ -40,9 +43,10 @@ During the 0.10.0 rollout a fleet also has `template/` and `manager/`: relative 
 Working copies (not in git): `/…/bot-fleet` (shared clone, used for setup) and `/…/bot-fleet-worktrees/<slug>/` (one worktree per bot, branch `wt/<slug>` tracking origin/main).
 
 ## OWNERS.json semantics
-- First matching glob wins; `**` any depth, `*` one segment. Every tracked file must match (validate.sh fails on unowned paths or paths that match two owner classes).
+- First matching glob wins; `**` any depth, `*` one segment. Every tracked file must match (validate.sh fails on unowned paths). A path that matches two owner classes also fails, except `local/shared/SHARED-SKILLS.md` (the builder rule, then `local/**`).
 - `template`: only `upgrade.sh` (it commits with `BOT_FLEET_UPGRADE=1` as manager).
 - `manager`: `BOT_ROLE=manager`.
+- `builder`: `local/shared/SHARED-SKILLS.md` only. The bot whose committed `local/fleet.json` role is builder, and whose status is not retired or paused, may change it. The check reads HEAD, not the working tree. `upgrade.sh` may write it. The manager may only add the pristine template stub (bytes equal to the committed template).
 - `self`: the bot whose slug is the second path segment. `create` lists roles that may add new files there (manager seeding a bot; builder with `BOT_RESTORE=1`).
 - `retired` role: nothing.
 Identity comes from `BOT_NAME`/`BOT_ROLE` or the worktree's git config (`fleet.bot`, `fleet.role`) that `worktree.sh` sets.

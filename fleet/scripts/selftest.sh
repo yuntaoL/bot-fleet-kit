@@ -26,6 +26,9 @@ grep -q 'Start every run with' "$SRC/fleet/docs/AGENT_GUIDE.md" && die "per-run 
 grep -q 'git fetch' "$SRC/fleet/scripts/sync.sh" || die "sync.sh lost its fetch"
 grep -q 'git rebase' "$SRC/fleet/scripts/sync.sh" || die "sync.sh lost its rebase"
 ok "0.10.9 no per-run pull in prompts or startup rules (pull.sh and sync.sh remain)"
+# 0.11.0: action index + builder-owned shared skills index.
+"$SRC/fleet/scripts/test-check-actions.sh" || die "check-actions"
+ok "0.11.0 action index and shared skills (checks, migration, builder ownership)"
 # 0.10.7: journal-gap midnight fixtures (normal clock, a real midnight crossing, 50s out, DST day lengths).
 # The crossing case finishes the pre-fix checks on the original day, sleeps 61s across midnight, and requires that to fail,
 # then runs this file's journal-gap lines.
@@ -83,7 +86,7 @@ reg forge pre-fleet; [ ! -f "$BOT_FLEET_WORKTREES/forge/bots/forge/kb/memory.md"
 conv forge atlas; reg forge active; ok "builder converted after rollback (rollback holder: manager)"
 # a builder-created worker
 (cd "$BOT_FLEET_WORKTREES/atlas" && git pull -q --ff-only && python3 -c "import json;p='local/fleet.json';f=json.load(open(p));f['bots'].append({'slug':'pip','name':'Pip','id':'fake-pip','role':'worker','status':'active'});json.dump(f,open(p,'w'),indent=2)" \
-  && fleet/scripts/sync.sh "registry: pip" local/ >/dev/null && ! fleet/scripts/create-bot.sh nobody >/dev/null 2>&1 && fleet/scripts/create-bot.sh pip >/dev/null && [ -f bots/pip/bot.json ] && [ ! -e bots/pip/routines/example.json ] && grep -q 'read `.bot`' bots/pip/THIN-PROMPT.md && ! fleet/scripts/create-bot.sh pip >/dev/null 2>&1 && fleet/scripts/sync.sh "add pip" bots/pip/ >/dev/null) || die "create-bot"; ok "create-bot.sh: copies starter, generates bot.json, renders prompt; refuses unknown/existing slug"
+  && fleet/scripts/sync.sh "registry: pip" local/ >/dev/null && ! fleet/scripts/create-bot.sh nobody >/dev/null 2>&1 && fleet/scripts/create-bot.sh pip >/dev/null && [ -f bots/pip/bot.json ] && [ -f bots/pip/kb/ACTIONS.md ] && grep -q 'SHARED-SKILLS.md' bots/pip/kb/ACTIONS.md && [ ! -e bots/pip/routines/example.json ] && grep -q 'read `.bot`' bots/pip/THIN-PROMPT.md && ! fleet/scripts/create-bot.sh pip >/dev/null 2>&1 && fleet/scripts/sync.sh "add pip" bots/pip/ >/dev/null) || die "create-bot"; ok "create-bot.sh: copies starter, generates bot.json, renders prompt; refuses unknown/existing slug"
 (cd "$BOT_FLEET_WORKTREES/atlas" && git pull -q --ff-only && BOT_FLEET_STRICT_ROLES=1 fleet/scripts/validate.sh >/dev/null) || die "strict validate after phase 2"; ok "validate.sh strict roles after phase 2"
 # negative checks
 (cd "$BOT_FLEET_WORKTREES/atlas" && python3 -c "import json;p='local/fleet.json';f=json.load(open(p));[b.update(status='paused') for b in f['bots'] if b['role']=='builder'];json.dump(f,open(p,'w'),indent=2)" \
@@ -204,6 +207,6 @@ ok "0.10.5 bootstrap: prompt worktree path -> .bot (untracked) -> bot.json gives
   && echo "bots/ghost/bot.json" > .bot && ! fleet/scripts/bot-pointer.sh --read >/dev/null 2>&1 \
   && echo "bots/forge/bot.json" > .bot && v="$(fleet/scripts/validate.sh 2>&1)" && grep -q "names 'forge' but this worktree's fleet.bot is 'atlas'" <<<"$v" && grep -q "rendered prompt bots/forge/THIN-PROMPT.md names worktree" <<<"$v" \
   && mv "$T/dotbot" .bot && v="$(fleet/scripts/validate.sh 2>&1)" && ! grep -q "WARN.*\.bot" <<<"$v" \
-  && grep -q "go to step 7" fleet/rules/startup.md && grep -q "If the worktree, \`.bot\`" templates/THIN-PROMPT.tmpl) || die ".bot fail-safe / agreement"
+  && grep -q "go to step 8" fleet/rules/startup.md && grep -q "If the worktree, \`.bot\`" templates/THIN-PROMPT.tmpl) || die ".bot fail-safe / agreement"
 ok "0.10.5 .bot: missing or dangling pointer fails (--read exit 1, validate warns, rules say fail safe); pointer/fleet.bot/prompt disagreement warns"
 echo "selftest: ALL PASS ($T)"
