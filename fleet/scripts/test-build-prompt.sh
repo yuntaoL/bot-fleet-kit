@@ -31,6 +31,8 @@ grep -q 'one-word reply' "$SRC/fleet/rules/startup.md" || fail "startup digest m
 grep -q 'An owner row beats a generic platform skill or a connector default.' "$SRC/fleet/rules/startup.md" || fail "startup digest missing owner-row sentence"
 grep -F -q '4. If no row exists, act thoughtfully: do the reversible part, and before anything irreversible (send, buy, book, post, delete) stop and ask the owner; when the same ask repeats, add a row to your ACTIONS.md.' "$SRC/fleet/rules/startup.md" || fail "startup digest missing step 4"
 grep -q 'kb/INDEX.md' "$SRC/fleet/rules/startup.md" || fail "startup digest missing re-read list"
+grep -F -q 'Look up the action in the embedded index and in Shared skills.' "$SRC/fleet/rules/startup.md" || fail "startup digest missing shared-skills lookup"
+grep -F -q 'At the start of a run, and again after a summary, re-read kb/INDEX.md' "$SRC/fleet/rules/startup.md" || fail "re-read is not limited to the start of a run and a summary"
 python3 -c 'import json; r=json.load(open("'"$SRC"'/fleet/OWNERS.json"))["rules"]; i=next(k for k,x in enumerate(r) if x["path"]=="local/prompts/**"); j=next(k for k,x in enumerate(r) if x["path"]=="local/**"); assert i<j and r[i]["owner"]=="builder"' || fail "prompts rule is not before local/**"
 grep -q '| Applies to |' "$SRC/templates/local/shared/SHARED-SKILLS.md" || fail "shared index missing Applies to"
 grep -q 'agent-data' "$SRC/fleet/migrations/0.12.0.sh" && fail "migration names a profile dir" || true
@@ -87,11 +89,49 @@ try:
     raise SystemExit("bad skill id was kept")
 except ValueError as e:
     assert "skill id" in str(e), e
-shared = pb.over_cap_report("x", 9000, 8000, [("action-index", "a" * 1000), ("shared-skills", "s" * 8000)], [])
-assert "Do not trim" in shared, shared
-assert "shorten its own ACTIONS.md rows" not in shared, shared
-own = pb.over_cap_report("y", 16000, 8000, [("action-index", "a" * 12000), ("pre-action", "p" * 4000)], [])
-assert "shorten its own ACTIONS.md rows" in own, own
+own = pb.over_cap_report("y", 9000, 8000, [("thin", "t" * 1000), ("shared-skills", "s" * 2000), ("action-index", "a" * 6000)], [])
+assert "Cut this bot's own action index: cut 1000 characters." in own, own
+assert "Do not trim" not in own, own
+tie = pb.over_cap_report("z", 9000, 8000, [("thin", "t" * 1000), ("shared-skills", "s" * 4000), ("action-index", "a" * 4000)], [])
+assert "Cut the shared skills: cut 1000 characters." in tie, tie
+assert "Cut this bot's own action index" not in tie, tie
+try:
+    pb.split_cells("  | a | b |")
+    raise SystemExit("indented row was accepted")
+except ValueError as e:
+    assert "indented" in str(e), e
+try:
+    pb.split_cells("| a | b | ")
+    raise SystemExit("trailing space after the pipe was accepted")
+except ValueError as e:
+    assert "whitespace after the last pipe" in str(e), e
+pb.check_applies(["worker", "all", "harbor-clerk"], ["harbor-clerk"], "skill ledger")
+try:
+    pb.check_applies(["worker worker"], ["harbor-clerk"], "preference 'paint'")
+    raise SystemExit("malformed applies was accepted")
+except ValueError as e:
+    assert "comma-separated" in str(e), e
+try:
+    pb.check_applies(["ghost-bot"], ["harbor-clerk"], "skill ledger")
+    raise SystemExit("unknown slug was accepted")
+except ValueError as e:
+    assert "fleet.json" in str(e), e
+kept = pb.relevant_prefs(
+    [{"cells": ["Calendar events.", "x"], "action": "Calendar events.", "applies": []}],
+    "look up calendar   events now",
+    "harbor-clerk",
+    "worker",
+    [],
+)
+assert kept, kept
+miss = pb.relevant_prefs(
+    [{"cells": ["crate paint"], "action": "crate paint", "applies": []}],
+    "look up calendar events",
+    "harbor-clerk",
+    "worker",
+    [],
+)
+assert not miss, miss
 print("unit ok")
 PY
 
@@ -130,7 +170,7 @@ status: seeded
 | fleet-change | Use when a change touches the fleet repo and must be classified before anyone applies it. This sentence must not be copied into the prompt. | repo and fleet changes | builder | `fleet/skills/fleet-change` | all | |
 | rename-bot | Use when renaming a bot display name, slug, worktree or branch. | repo and fleet changes | builder | `fleet/skills/rename-bot` | builder | |
 | ledger | Use when filing pier notes into the ledger skill, including the long explanation that must not be copied into the prompt. | pier notes | builder | `local/shared/skills/ledger` | manager | `kb/prefs/ledger.md` and [notes](kb/prefs/notes.md) |
-| tide-table | Use when reading tide times for the pier. | tide times | worker | `local/shared/skills/tide-table` | worker | |
+| tide-table | Use when reading tide times for the pier. | tide times | worker | `local/shared/skills/tide-table` | worker | [sheet](../../fleet/skills/tide-table/SKILL.md) |
 | ledger | Second row of the same skill. | pier notes | builder | `local/shared/skills/ledger` | manager | |
 | shelf-index | Use only when the skill name or its path is named. | shelf | builder | library |  | |
 | pier-bell | Use only when the name is named. | bell | worker | library |  | |
@@ -140,7 +180,7 @@ status: seeded
 
 | Action | Generic default it overrides | Read first | Pointer | Applies to |
 |---|---|---|---|---|
-| calendar events | a connector calendar | kb/prefs/calendar.md and [bell](../../local/shared/skills/tide-table/SKILL.md) | owner calendar wins | |
+| Calendar events. | a connector calendar | kb/prefs/calendar.md and [bell](../../local/shared/skills/tide-table/SKILL.md) | owner calendar wins | |
 | dock painting | a generic edit | `fleet/docs/CONTRIBUTING.md` | builder wins | builder |
 | crate paint | a generic color | notes | nowhere | |
 """
@@ -258,13 +298,17 @@ echo "$ERR" | grep 'FAIL cargo-crier: compiled prompt is '
 echo "$ERR" | grep 'action-index '
 echo "$ERR" | grep 'crate log'
 echo "$ERR" | grep 'Fixed cost '
+echo "$ERR" | grep 'Action index '
+echo "$ERR" | grep 'Shared skills '
 echo "$ERR" | grep -q 'Largest sections:' || fail "over-cap report missing sections"
 echo "$ERR" | grep -q 'Largest rows:' || fail "over-cap report missing rows"
 echo "$ERR" | grep -q 'duplicate skill row ledger' || fail "duplicate skill was silent: $ERR"
 echo "$ERR" | awk '/Largest sections:/{getline; print; exit}' | grep -q '^  action-index ' || fail "largest section is not the action index: $ERR"
-echo "$ERR" | grep -q 'The overflow is this bot'"'"'s own action index' || fail "over-cap blamed the shared cost: $ERR"
-echo "$ERR" | grep -q 'The fix is for this bot to shorten its own ACTIONS.md rows. Hard rules are copied verbatim and are never truncated.' || fail "missing shorten guidance"
+echo "$ERR" | grep -q 'Cut this bot'"'"'s own action index: cut ' || fail "over-cap did not blame the action index: $ERR"
+echo "$ERR" | grep -q 'Shorten those ACTIONS.md rows. Hard rules are copied verbatim and are never truncated.' || fail "missing shorten guidance"
 echo "$ERR" | grep -q 'Fixed cost ' || fail "over-cap missing fixed cost: $ERR"
+echo "$ERR" | grep -q 'Shared skills ' || fail "over-cap missing shared skills: $ERR"
+ERR="$ERR" python3 -c 'import os,re; err=os.environ["ERR"]; m=re.search(r"compiled prompt is (\d+) characters \(cap (\d+)\)", err); n=re.search(r"Cut this bot.s own action index: cut (\d+) characters", err); assert m and n and int(n.group(1))==int(m.group(1))-int(m.group(2)), (m, n)' || fail "cut count is not the overflow: $ERR"
 [ -f "$REPO/local/prompts/harbor-clerk.md" ] || fail "clerk prompt missing"
 [ -f "$REPO/local/prompts/pier-archivist.md" ] || fail "archivist prompt missing"
 [ ! -e "$REPO/local/prompts/cargo-crier.md" ] || fail "over-cap prompt was written"
@@ -276,16 +320,22 @@ python3 - "$REPO" <<'PY'
 import pathlib, sys
 root = pathlib.Path(sys.argv[1])
 def parts(text):
-    a = text.find("\n## Action index\n")
-    b = text.find("\n## Shared skills\n")
-    action = text[a:b] if a >= 0 and b > a else ""
-    return len(text) - len(action), len(action)
+    def span(start, end):
+        a = text.find(start)
+        b = text.find(end)
+        if a < 0 or b < a:
+            return ""
+        return text[a:b]
+    action = span("\n## Action index\n", "\n## Shared skills\n")
+    shared = span("\n## Shared skills\n", "\n## Left in git\n")
+    return len(text) - len(action) - len(shared), len(action), len(shared)
 for slug in ("harbor-clerk", "pier-archivist"):
     text = (root / "local/prompts" / f"{slug}.md").read_text()
-    fixed, action = parts(text)
+    fixed, action, shared = parts(text)
     print(f"SIZE {slug} {len(text)}")
     print(f"FIXED {slug} {fixed}")
     print(f"ACTION {slug} {action}")
+    print(f"SHARED {slug} {shared}")
 PY
 
 clerk() { cat "$REPO/local/prompts/harbor-clerk.md"; }
@@ -293,7 +343,8 @@ arch() { cat "$REPO/local/prompts/pier-archivist.md"; }
 clerk | grep -q '## Before you act' || fail "missing pre-action heading"
 clerk | grep -q 'even on a one-word reply' || fail "missing one-word reply"
 clerk | grep -q 'even right after a summary' || fail "missing summary clause"
-clerk | grep -q 'Look up the action in the embedded index.' || fail "missing index lookup"
+clerk | grep -F -q 'Look up the action in the embedded index and in Shared skills.' || fail "missing shared-skills lookup"
+clerk | grep -F -q 'At the start of a run, and again after a summary, re-read kb/INDEX.md' || fail "re-read is not limited to the start of a run and a summary"
 clerk | grep -q 'An owner row beats a generic platform skill or a connector default.' || fail "missing owner-row rule"
 clerk | grep -q 'add a row to your ACTIONS.md' || fail "missing add-a-row"
 clerk | grep -q 'act thoughtfully' || fail "missing act thoughtfully"
@@ -347,6 +398,7 @@ arch | grep -q -- '- wharf-bell |' && fail "skills segment leaked to the builder
 clerk | grep -q 'kb/prefs/ledger.md' || fail "skill read-first target missing"
 clerk | grep -q 'kb/prefs/notes.md' || fail "skill read-first link missing"
 clerk | grep -q 'local/shared/skills/tide-table/SKILL.md' || fail "relative preference link was not rewritten"
+clerk | grep -q 'fleet/skills/tide-table/SKILL.md' || fail "relative skill link was not rewritten"
 clerk | grep -q '\.\./\.\./' && fail "compiled prompt kept a ../ link" || true
 clerk | grep -q 'builder wins' && fail "builder preference reached the clerk" || true
 clerk | grep -q 'nowhere' && fail "unrelated preference reached the clerk" || true

@@ -35,7 +35,7 @@ Placeholder rows (`fill in`) are left out. A real hard rule is never dropped or 
 
 This is the `## Prompt digest` of `fleet/rules/startup.md`. Every compiled prompt includes it, for every role:
 
-> Before every action on an outside service or the owner's data, at the moment you act: even on a one-word reply such as "yes", "ok" or "do it", even when you are carrying out something you proposed earlier, and even right after a summary. A summary carries no duties. Re-read kb/INDEX.md, local/shared/SHARED-SKILLS.md, and today's journal. 1. Name the action. 2. Look up the action in the embedded index. 3. If a row exists, open its read-first files and follow them. An owner row beats a generic platform skill or a connector default. 4. If no row exists, act thoughtfully: do the reversible part, and before anything irreversible (send, buy, book, post, delete) stop and ask the owner; when the same ask repeats, add a row to your ACTIONS.md. If an embedded row disagrees with the file in git, the file wins. At the start of a run, run `fleet/scripts/build-prompt.sh --check <slug>`; if it reports you stale, read kb/ACTIONS.md and local/shared/SHARED-SKILLS.md from git before any such action, and tell the builder.
+> Before every action on an outside service or the owner's data, at the moment you act: even on a one-word reply such as "yes", "ok" or "do it", even when you are carrying out something you proposed earlier, and even right after a summary. A summary carries no duties. 1. Name the action. 2. Look up the action in the embedded index and in Shared skills. 3. If a row exists, open its read-first files and follow them. An owner row beats a generic platform skill or a connector default. 4. If no row exists, act thoughtfully: do the reversible part, and before anything irreversible (send, buy, book, post, delete) stop and ask the owner; when the same ask repeats, add a row to your ACTIONS.md. If an embedded row disagrees with the file in git, the file wins. At the start of a run, and again after a summary, re-read kb/INDEX.md, local/shared/SHARED-SKILLS.md, and today's journal. At the start of a run, run `fleet/scripts/build-prompt.sh --check <slug>`; if it reports you stale, read kb/ACTIONS.md and local/shared/SHARED-SKILLS.md from git before any such action, and tell the builder.
 
 File mode still follows startup step 4. Compiled mode does not remove that step.
 
@@ -84,17 +84,17 @@ Compare is against `BOT_FLEET_PROMPT_BASE` when that commit exists, otherwise th
 
 The cap is 8000 characters. Set `prompt_max_chars` in `local/fleet.json`, or `BOT_FLEET_PROMPT_MAX` for one run. The environment variable wins.
 
-Over the cap, the build fails and names every section by size. It also names the fixed cost (everything except that bot's action index) and the action index. When the fixed cost is the larger part, the report says not to trim that bot's ACTIONS.md. When the action index is the larger part, that bot shortens its own rows. Hard rules are not truncated. The cap stays 8000.
+Over the cap, the build fails and names three parts: fixed cost (thin prompt, routine, rule gists, footer), the bot's own action index, and skill plus preference rows. It says which part to cut and the exact overflow in characters. The strictly largest part is the one to cut. A tie does not tell the bot to trim ACTIONS.md unless that index is strictly the largest. Hard rules are not truncated. The cap stays 8000.
 
 Measured on the fixture fleet in `fleet/scripts/test-build-prompt.sh` (fictional bots, kit 0.12.0):
 
-| Bot | Characters | Fixed cost | Action index |
-|---|---:|---:|---:|
-| harbor-clerk | 4920 | 4208 | 712 |
-| pier-archivist | 4011 | 3889 | 122 |
-| cargo-crier | 16020 | 3965 | 12055 |
+| Bot | Characters | Fixed | Action index | Shared skills |
+|---|---:|---:|---:|---:|
+| harbor-clerk | 5027 | 3661 | 712 | 654 |
+| pier-archivist | 4082 | 3716 | 122 | 244 |
+| cargo-crier | 16127 | 3600 | 12055 | 472 |
 
-cargo-crier's largest row, crate log, is 12036 characters. The report tells that bot to shorten the row, because the action index is larger than the fixed cost. The board fixture in `test-board.sh` writes `local/prompts/mina.md` at 3618 characters. Fixed cost is per bot: it includes the thin prompt, the routine, the rule gists that apply, the shared rows that apply, and the footer.
+cargo-crier's largest row, crate log, is 12036 characters. The action index is strictly the largest part, so the report says to cut 8127 characters from that index. The board fixture in `test-board.sh` writes `local/prompts/mina.md` at 3689 characters.
 
 ## One approval for a kit release
 

@@ -36,7 +36,7 @@ ROUTINE_ANCHORS = (
     "right after a summary",
     "kb/INDEX.md",
     "today's journal",
-    "Look up the action in the embedded index.",
+    "Look up the action in the embedded index and in Shared skills.",
     "An owner row beats a generic platform skill or a connector default.",
     "4. If no row exists, act thoughtfully: do the reversible part, and before anything irreversible (send, buy, book, post, delete) stop and ask the owner; when the same ask repeats, add a row to your ACTIONS.md.",
     "the file wins",
@@ -107,6 +107,10 @@ def split_cells(line):
     A row that ends in \\| has no closing pipe. That is a build failure, not a cell that ends in \\.
     """
     s = line.strip("\n")
+    if s != s.lstrip(" \t") and s.lstrip(" \t").startswith("|"):
+        raise ValueError("table row is indented; move it to the start of the line: %s" % s.strip())
+    if s != s.rstrip(" \t") and s.rstrip(" \t").endswith("|"):
+        raise ValueError("table row has whitespace after the last pipe: %s" % s.strip())
     if s.startswith("|"):
         s = s[1:]
     if not s.endswith("|"):
@@ -613,14 +617,56 @@ def rewrite_rel_links(text, source="local/shared/SHARED-SKILLS.md"):
 def skill_lines(rows):
     lines = []
     for r in rows:
-        bits = [r["name"], r["actions"], r["location"]]
-        reads = read_targets(r.get("read") or "")
+        actions = rewrite_rel_links(r["actions"])
+        location = rewrite_rel_links(r["location"])
+        read = rewrite_rel_links(r.get("read") or "")
+        bits = [r["name"], actions, location]
+        reads = read_targets(read)
         if reads:
             bits.append(" ".join(reads))
         if r.get("hard") is not None:
-            bits.append(r["hard"])
+            bits.append(rewrite_rel_links(r["hard"]))
         lines.append("- " + " | ".join(bits))
     return lines
+
+
+def loose(text):
+    """Lowercase, and treat punctuation and whitespace as the same gap."""
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).split())
+
+
+def loose_match(text, phrase):
+    """Fallback relevance: case, punctuation, and extra spaces do not hide a phrase."""
+    phrase_n = loose(phrase)
+    if not phrase_n:
+        return False
+    return _token(loose(text), phrase_n)
+
+
+def known_slugs(fleet):
+    out = []
+    for bot in fleet.get("bots") or []:
+        slug = bot.get("slug") if isinstance(bot, dict) else None
+        if isinstance(slug, str) and slug:
+            out.append(slug)
+    return out
+
+
+def check_applies(values, slugs, what):
+    """Applies to is comma-separated: all, a known role, or a slug from fleet.json."""
+    allowed = set(ROLES) | set(slugs)
+    for raw in values:
+        if raw in allowed:
+            continue
+        if any(ch.isspace() for ch in raw):
+            raise ValueError(
+                "SHARED-SKILLS.md: Applies to value %r in %s is not comma-separated; split each role or slug with a comma"
+                % (raw, what)
+            )
+        raise ValueError(
+            "SHARED-SKILLS.md: Applies to value %r in %s is not all, a known role, or a slug in fleet.json"
+            % (raw, what)
+        )
 
 
 def relevant_prefs(prefs, actions_text, slug, role, skill_rows_picked):
@@ -640,14 +686,14 @@ def relevant_prefs(prefs, actions_text, slug, role, skill_rows_picked):
                 out.append(pref)
             continue
         action = (pref["action"] or "").strip().strip("`")
-        if action and _token(actions_text, action):
+        if action and loose_match(actions_text, action):
             out.append(pref)
             continue
         blob = " | ".join(pref["cells"])
-        names = re.findall(r"`([a-z0-9][a-z0-9-]*)`", blob)
-        names += re.findall(r"skills/([a-z0-9][a-z0-9-]*)", blob)
+        names = [n.lower() for n in re.findall(r"`([A-Za-z0-9][A-Za-z0-9-]*)`", blob)]
+        names += [n.lower() for n in re.findall(r"skills/([A-Za-z0-9][A-Za-z0-9-]*)", blob)]
         if any(
-            _token(actions_text, n) or skills_segment(actions_text, n) or _token(skill_blob, n)
+            loose_match(actions_text, n) or skills_segment(actions_text, n) or loose_match(skill_blob, n)
             for n in names
         ):
             out.append(pref)
@@ -720,26 +766,51 @@ def input_record(src):
 
 
 def over_cap_report(slug, total, cap, sections, row_sizes=None):
+    """Three parts: fixed (thin, routine, gists, footer), the action index, and skill plus preference rows.
+
+    Cut the strictly largest part. A tie keeps the earlier of shared skills, then fixed cost,
+    and does not tell the bot to trim ACTIONS.md unless the action index is strictly largest.
+    """
+    fixed_n = action_n = shared_n = 0
+    for name, text in sections:
+        n = len(text)
+        if name == "action-index":
+            action_n += n
+        elif name == "shared-skills":
+            shared_n += n
+        else:
+            fixed_n += n
+    overflow = total - cap
+    # Tie-break order: shared skills, then fixed cost, then the action index.
+    ranked_parts = (("shared skills", shared_n), ("fixed cost", fixed_n), ("action index", action_n))
+    label, size = ranked_parts[0]
+    for name, n in ranked_parts[1:]:
+        if n > size:
+            label, size = name, n
     ranked = sorted(((n, len(t)) for n, t in sections), key=lambda x: (-x[1], x[0]))
-    action_n = sum(len(t) for n, t in sections if n == "action-index")
-    fixed_n = total - action_n
     lines = ["FAIL %s: compiled prompt is %d characters (cap %d)." % (slug, total, cap), "Largest sections:"]
     for name, n in ranked:
         lines.append("  %s %d" % (name, n))
-    lines.append("Fixed cost %d (thin, routine, rule gists, shared skills, footer)." % fixed_n)
+    lines.append("Fixed cost %d (thin prompt, routine, rule gists, footer)." % fixed_n)
     lines.append("Action index %d." % action_n)
+    lines.append("Shared skills %d (skill and preference rows)." % shared_n)
     lines.append("Largest rows:")
     for name, n in sorted(row_sizes or [], key=lambda x: (-x[1], x[0]))[:12]:
         lines.append("  %s %d" % (name, n))
-    if fixed_n > action_n:
+    if label == "action index":
         lines.append(
-            "The overflow is shared and fixed cost (%d), larger than this bot's action index (%d). Do not trim this bot's ACTIONS.md for a shared cost."
-            % (fixed_n, action_n)
+            "Cut this bot's own action index: cut %d characters. Shorten those ACTIONS.md rows. Hard rules are copied verbatim and are never truncated."
+            % overflow
+        )
+    elif label == "shared skills":
+        lines.append(
+            "Cut the shared skills: cut %d characters. Do not trim this bot's ACTIONS.md for a shared cost."
+            % overflow
         )
     else:
         lines.append(
-            "The overflow is this bot's own action index (%d), larger than the fixed cost (%d). The fix is for this bot to shorten its own ACTIONS.md rows. Hard rules are copied verbatim and are never truncated."
-            % (action_n, fixed_n)
+            "Cut the fixed cost: cut %d characters. Do not trim this bot's ACTIONS.md for a fixed cost."
+            % overflow
         )
     return "\n".join(lines)
 
@@ -801,6 +872,11 @@ def compile_bot(fleet, bot, items, cap):
     try:
         actions, row_sizes = action_lines(actions_text)
         skill_table, pref_rows = skill_rows(shared_text)
+        slugs = known_slugs(fleet)
+        for row in skill_table:
+            check_applies(row["applies"], slugs, "skill %s" % row["name"])
+        for pref in pref_rows:
+            check_applies(pref["applies"], slugs, "preference %r" % (pref["action"] or ""))
         picked, skill_warns = relevant_skills(actions_text, skill_table, role)
         kept_prefs = relevant_prefs(pref_rows, actions_text, slug, role, picked)
     except ValueError as e:
