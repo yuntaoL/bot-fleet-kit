@@ -36,18 +36,53 @@ def gcfg(k):
     try: return subprocess.check_output(["git", "config", "--get", k], text=True, cwd=ROOT).strip()
     except subprocess.CalledProcessError: return ""
 def git_bytes(spec):
-    try: return subprocess.check_output(["git", "show", spec], cwd=ROOT)
+    try: return subprocess.check_output(["git", "show", spec], cwd=ROOT, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError: return None
+def head_fleet():
+    """HEAD:local/fleet.json. An unstaged or uncommitted edit does not count."""
+    raw = git_bytes("HEAD:local/fleet.json")
+    if raw is None: return None
+    try: return json.loads(raw.decode())
+    except Exception: return None
 def fleet_record(slug):
     """Bot row from HEAD:local/fleet.json. An unstaged or uncommitted edit does not count."""
     if not slug: return None
-    raw = git_bytes("HEAD:local/fleet.json")
-    if raw is None: return None
-    try: fl = json.loads(raw.decode())
-    except Exception: return None
+    fl = head_fleet()
+    if not fl: return None
     for b in fl.get("bots", []):
         if b.get("slug") == slug: return b
     return None
+def board_cfg():
+    """(path, coordinator slug) from HEAD fleet.json, or None when the feature is off."""
+    fl = head_fleet()
+    if not fl: return None
+    board = fl.get("board")
+    if not isinstance(board, dict): return None
+    path, coord = board.get("path"), board.get("coordinator")
+    if not isinstance(path, str) or not isinstance(coord, str): return None
+    if not path or path.startswith("/") or ".." in path.split("/"): return None
+    return path, coord
+def retired_bot(rec):
+    if not rec: return False
+    return rec.get("role") == "retired" or rec.get("status") == "retired"
+def board_write_allowed(me, role, path, status):
+    """None when path is not the configured board. True or False when it is.
+
+    File-level only. A bot may add or update only its own cards; the coordinator's
+    scan audits that, because a commit cannot see which row is whose.
+    The manager and the coordinator may create or delete the file. Any non-retired
+    bot may update it.
+    """
+    cfg = board_cfg()
+    if not cfg or cfg[0] != path: return None
+    coord = cfg[1]
+    rec = fleet_record(me) if me else None
+    if role == "retired" or retired_bot(rec): return False
+    manager = role == "manager"
+    coord_ok = bool(me) and me == coord and rec is not None and not retired_bot(rec)
+    if status in ("A", "D"): return manager or coord_ok
+    if manager: return True
+    return rec is not None and not retired_bot(rec)
 def active_builder(slug):
     b = fleet_record(slug)
     if not b or b.get("role") != "builder": return False
@@ -78,6 +113,11 @@ def check():
             if role == "manager" and st == "A" and path == "local/shared/SHARED-SKILLS.md" and pristine_shared_skills(): continue
             bad.append((path, "builder-owned shared skills index (HEAD fleet.json: active builder, or upgrade.sh; the manager may only add the pristine template stub)"))
             continue
+        board_ok = board_write_allowed(me, role, path, st)
+        if board_ok is True: continue
+        if board_ok is False:
+            bad.append((path, "shared task board (HEAD fleet.json board): the manager and the coordinator may create or delete it; any non-retired bot may update it. A bot may add or update only its own cards; the coordinator's scan audits that"))
+            continue
         if o == "manager":
             if role != "manager": bad.append((path, "manager-owned")); continue
         elif o == "self":
@@ -100,6 +140,26 @@ def audit():
         if len(owners) > 1 and not multi_ok(f):
             err += 1; print(f"FAIL {f} matches several owner classes: {owners}")
     return err
+def board_stage():
+    """Print the board path when this bot may stage the worktree file. Exit 1 otherwise."""
+    cfg = board_cfg()
+    if not cfg: sys.exit(1)
+    path = cfg[0]
+    if os.path.islink(path) or not os.path.isfile(path): sys.exit(1)
+    root = os.path.realpath(ROOT)
+    real = os.path.realpath(path)
+    try:
+        if os.path.commonpath([root, real]) != root: sys.exit(1)
+    except ValueError:
+        sys.exit(1)
+    me = os.environ.get("BOT_NAME") or gcfg("fleet.bot")
+    role = os.environ.get("BOT_ROLE") or gcfg("fleet.role") or "worker"
+    status = "M" if git_bytes("HEAD:" + path) is not None else "A"
+    if board_write_allowed(me, role, path, status) is not True: sys.exit(1)
+    print(path)
 if __name__ == "__main__":
+    if len(sys.argv) < 2: sys.exit("usage: owners.py check|audit|board-stage")
     if sys.argv[1] == "check": check()
     elif sys.argv[1] == "audit": sys.exit(1 if audit() else 0)
+    elif sys.argv[1] == "board-stage": board_stage()
+    else: sys.exit("usage: owners.py check|audit|board-stage")

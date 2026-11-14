@@ -36,6 +36,8 @@ ok "0.11.0 action index and shared skills (checks, migration, builder ownership)
 # 0.12.0: compiled per-bot prompts. File mode stays the default.
 "$SRC/fleet/scripts/test-build-prompt.sh" || die "build-prompt"
 ok "0.12.0 compiled prompts (digest, stale, cap, opt-out, relevance)"
+"$SRC/fleet/scripts/test-board.sh" || die "board"
+ok "0.12.0 shared task board (optional; off unless fleet.json sets board)"
 # 0.10.7: journal-gap midnight fixtures (normal clock, a real midnight crossing, 50s out, DST day lengths).
 # The crossing case finishes the pre-fix checks on the original day, sleeps 61s across midnight, and requires that to fail,
 # then runs this file's journal-gap lines.

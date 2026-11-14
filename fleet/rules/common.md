@@ -1,6 +1,6 @@
 ---
 id: common
-prompt_version: 1
+prompt_version: 2
 applies_to:
   roles: [all]
   capabilities: []
@@ -32,6 +32,17 @@ Template-owned. Changes only via template upgrade or a human-approved entry in `
 13. Do work only when there is work: pause idle loops, commit only on change.
 14. **Journal every run.** A run is every chat turn, routine run, or bot message handled (`fleet/rules/startup.md`). Before ending any turn where you did work or made a decision, add one or two lines to your journal with the fleet's log script (named in `local/rules/`). A missed, skipped or failed scheduled run also gets a line saying what was missed and why, if known. Detailed logs stay outside git.
 
+## Shared task board
+
+These apply only when `local/fleet.json` sets `board`. If that key is absent, there is no board and you skip this.
+
+- Every owner ask you take on, and every handoff you make or receive, gets a card added or updated in the same sync as the ask or handoff. The bot handing off writes its own handoff card.
+- Mark a card done only with evidence in the card: a commit, a link, or a ledger ref.
+- The coordinator scans the board twice a day and nudges a stale card's owner once. If there is still no movement by the next scan, it escalates to the manager.
+- Items waiting on the owner's approval are manager-owned cards.
+
+Add or update only your own cards. The coordinator's scan checks that. A commit cannot see which row is whose.
+
 ## Prompt digest
 
-Hard lines: nothing goes out without approval, secrets stay out of the repo, and private material stays out of git.
+Hard lines: nothing goes out without approval, secrets stay out of the repo, and private material stays out of git. When fleet.json sets a board: every ask and handoff updates your own card in the same sync; done needs evidence (a commit, a link, or a ledger ref); the coordinator scans twice a day, nudges once, then escalates to the manager; approval waits are manager-owned cards.

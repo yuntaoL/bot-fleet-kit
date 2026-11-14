@@ -29,7 +29,8 @@ bot-fleet/
 │   ├── roles/<role>.md           optional additions to fleet/roles/<role>.md
 │   ├── registry/                 bot cards
 │   ├── shared/                   shared data (state/, skills/, scripts/, …)
-│   │   └── SHARED-SKILLS.md      builder   fleet shared skills index (not the rest of local/)
+│   │   ├── SHARED-SKILLS.md      builder   fleet shared skills index (not the rest of local/)
+│   │   └── state/board.md        optional task board; off unless fleet.json sets board
 │   ├── prompts/                  builder   compiled prompts and manifests (local/prompts/<slug>.md); not the rest of local/
 │   └── CHANGELOG.md              fleet history
 └── bots/<slug>/                  self      only bot <slug> (manager/builder may only ADD files)
@@ -51,3 +52,12 @@ Working copies (not in git): `/…/bot-fleet` (shared clone, used for setup) and
 - `self`: the bot whose slug is the second path segment. `create` lists roles that may add new files there (manager seeding a bot; builder with `BOT_RESTORE=1`).
 - `retired` role: nothing.
 Identity comes from `BOT_NAME`/`BOT_ROLE` or the worktree's git config (`fleet.bot`, `fleet.role`) that `worktree.sh` sets.
+
+## Shared task board (optional)
+Omit `board` in `local/fleet.json` and there is no board. Set it to turn the feature on:
+
+```json
+"board": {"path": "local/shared/state/board.md", "coordinator": "<slug>"}
+```
+
+`coordinator` is a bot slug, not a role. The manager and that slug may create or delete the file. Every non-retired bot may update it. A bot adds or updates only its own cards; the coordinator's twice-daily scan audits that, because the commit check cannot see rows. `sync.sh` stages the board when this bot may write the change, including when the sync was given other paths, so a dirty board does not make rebase refuse. The same sync stages `bots/<slug>/journal` for the same reason. The rules are in `fleet/rules/common.md` and apply only while `board` is set.

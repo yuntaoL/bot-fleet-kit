@@ -145,6 +145,45 @@ def schema_name_for(path):
 def fail_line(path, exc):
     return "FAIL %s: %s" % (path, str(exc).splitlines()[0])
 
+BOARD_PATH_RX = re.compile(r"^local/(?:[a-z0-9_-]+/)*[a-z0-9_-]+\.md$")
+RESERVED_BOARD_PATHS = {
+    "local/shared/SHARED-SKILLS.md",
+    "local/overrides.md",
+}
+
+def board_errors(fleet):
+    """Semantic checks for the optional board. Empty when the key is omitted.
+
+    The JSON schema checks shape. This checks that the coordinator is a
+    non-retired bot slug in this fleet, and that the path is a local markdown
+    file that is not already a privileged fleet file.
+    """
+    if not isinstance(fleet, dict) or "board" not in fleet:
+        return []
+    board = fleet.get("board")
+    if not isinstance(board, dict):
+        return ["board must be an object with path and coordinator, or be omitted"]
+    errs = []
+    path = board.get("path")
+    coord = board.get("coordinator")
+    if not isinstance(path, str) or path.startswith("/") or ".." in path.split("/"):
+        errs.append("board.path must be a local markdown file with no ..")
+    elif (path in RESERVED_BOARD_PATHS or path.startswith("local/prompts/")
+            or path.startswith("local/rules/")):
+        errs.append("board.path must not be a rules file, the shared skills index, or a compiled prompt")
+    elif not BOARD_PATH_RX.fullmatch(path):
+        errs.append("board.path must be a local markdown file with no ..")
+    if not isinstance(coord, str) or not re.fullmatch(r"[a-z0-9-]+", coord or ""):
+        errs.append("board.coordinator must be a bot slug, not a role")
+        return errs
+    bots = fleet.get("bots") if isinstance(fleet.get("bots"), list) else []
+    match = next((b for b in bots if isinstance(b, dict) and b.get("slug") == coord), None)
+    if match is None:
+        errs.append("board.coordinator %s is not a bot in this fleet" % coord)
+    elif match.get("role") == "retired" or match.get("status") == "retired":
+        errs.append("board.coordinator %s is retired" % coord)
+    return errs
+
 def apply_schema(jsonschema_mod, instance, schema):
     # SystemExit inherits from BaseException, not Exception. sys.exit(0) in a
     # validator must not become a successful return.
@@ -158,7 +197,12 @@ def check_file(path, schema_name, schemas=None, jsonschema_mod=None, root_dir=No
     if jsonschema_mod is None or schemas is None:
         jsonschema_mod, schemas = load_schemas(root_dir or root())
     try:
-        apply_schema(jsonschema_mod, json.load(open(path)), schemas[schema_name])
+        instance = json.load(open(path))
+        apply_schema(jsonschema_mod, instance, schemas[schema_name])
+        if schema_name == "fleet":
+            errs = board_errors(instance)
+            if errs:
+                raise RuntimeError("; ".join(errs))
     except Exception as e:
         return fail_line(path, e)
     return None
@@ -174,6 +218,10 @@ def check_staged_blob(path, schema_name, sha, schemas, jsonschema_mod):
         return fail_line(path, e)
     try:
         apply_schema(jsonschema_mod, instance, schemas[schema_name])
+        if schema_name == "fleet":
+            errs = board_errors(instance)
+            if errs:
+                raise RuntimeError("; ".join(errs))
     except Exception as e:
         return fail_line(path, e)
     return None

@@ -88,8 +88,8 @@ Measured on the fixture fleet in `fleet/scripts/test-build-prompt.sh` (fictional
 
 | Bot | Characters | Notes |
 |---|---:|---|
-| harbor-clerk | 3035 | worker, calendar row, one local rule |
-| pier-archivist | 2805 | builder, fewer action rows |
+| harbor-clerk | 3303 | worker, calendar row, one local rule |
+| pier-archivist | 3073 | builder, fewer action rows |
 | cargo-crier | 14634 | over cap; action index 12053 |
 
 The thin block is about 1200 characters and the pre-action routine about 700. A modest index fits under 8000. The over-cap bot's hard rule is one long sentence repeated; the report tells that bot to shorten the row.

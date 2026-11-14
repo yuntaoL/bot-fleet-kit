@@ -8,8 +8,11 @@
 #   no paths, active builder (HEAD:local/fleet.json role builder, status not retired or paused):
 #     bots/<fleet.bot>/, local/shared/SHARED-SKILLS.md, and local/prompts/
 #   no paths, anyone else: bots/<fleet.bot>/
-# Untracked files inside those paths are staged. Unstaged and untracked files outside them are left untouched.
-# A tracked edit left outside them stays unstaged; git rebase then refuses to start (existing), so that run does not push.
+# Every sync also stages bots/<fleet.bot>/journal (when that directory exists) and the configured
+# board file when this bot may write the change. Path arguments used to leave the journal unstaged,
+# and a dirty board the same way; git rebase then refused to start.
+# Untracked files inside the staged paths are staged. A tracked edit outside them stays unstaged;
+# git rebase then refuses to start, so that run does not push.
 # 0.10.8: before commit, staged bots/<slug>/routines/*.json, bots/<slug>/bot.json and local/fleet.json are
 # schema-checked from index blobs (the instance and fleet/schema/*.schema.json are one snapshot).
 # A symlink, gitlink, or other non-regular mode is refused. A failure refuses the commit and the push.
@@ -53,6 +56,11 @@ sys.exit(0 if ok else 1)
 '; then active_builder=1; fi
 if [ "$active_builder" = 1 ] && [ -f local/shared/SHARED-SKILLS.md ]; then git add -- local/shared/SHARED-SKILLS.md; fi
 if [ "$active_builder" = 1 ] && [ -d local/prompts ]; then git add -- local/prompts; fi
+# Journal, with or without path arguments. Leaving it unstaged makes rebase refuse.
+if [ -d "bots/$me/journal" ]; then git add -- "bots/$me/journal" 2>/dev/null || true; fi
+# Configured board, only when this bot may write the worktree change (create vs update).
+board_path="$(BOT_NAME="$me" BOT_ROLE="$role" python3 fleet/scripts/owners.py board-stage 2>/dev/null || true)"
+if [ -n "$board_path" ]; then git add -- "$board_path"; fi
 if git diff --cached --quiet; then
   echo "sync: no change"; git fetch -q origin main || true; git rebase -q origin/main 2>/dev/null || git rebase --abort 2>/dev/null || true; exit 0
 fi
