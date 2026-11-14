@@ -4,8 +4,8 @@ usage: owners.py check   (reads `git diff --cached --name-status --no-renames` o
        owners.py audit   (every tracked file matches an owner; two owner classes fail, except MULTI_OWNER_OK)
 
 Role and the pristine shared-skills stub are read from git (HEAD or the index), never the working tree.
-A builder may change local/shared/SHARED-SKILLS.md only when HEAD:local/fleet.json gives that slug role
-builder and a status other than retired or paused.
+A builder may change local/shared/SHARED-SKILLS.md and local/prompts/ only when HEAD:local/fleet.json
+gives that slug role builder and a status other than retired or paused.
 """
 import json, os, re, subprocess, sys
 ROOT = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
@@ -15,6 +15,11 @@ OWN = json.load(open(os.path.join(ROOT, "fleet/OWNERS.json")))["rules"]
 MULTI_OWNER_OK = {
     "local/shared/SHARED-SKILLS.md",  # builder, then local/**
 }
+def multi_ok(path):
+    if path in MULTI_OWNER_OK:
+        return True
+    # Compiled prompts are builder-owned and also match the later local/** manager rule.
+    return path.startswith("local/prompts/")
 def rx(g):
     out = ""; i = 0
     while i < len(g):
@@ -92,7 +97,7 @@ def audit():
         if not hits:
             err += 1; print(f"FAIL unowned path: {f}"); continue
         owners = sorted({r["owner"] for r in hits})
-        if len(owners) > 1 and f not in MULTI_OWNER_OK:
+        if len(owners) > 1 and not multi_ok(f):
             err += 1; print(f"FAIL {f} matches several owner classes: {owners}")
     return err
 if __name__ == "__main__":

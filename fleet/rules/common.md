@@ -1,3 +1,11 @@
+---
+id: common
+prompt_version: 1
+applies_to:
+  roles: [all]
+  capabilities: []
+---
+
 # Common rules (every bot, every run)
 
 `<slug>`, `<role>` and `<routine>` are your own values. You start knowing only your worktree path (from your prompt). Read `.bot` at the worktree root: it holds one line, `bots/<slug>/bot.json`. Open that file and take `<slug>`, `<role>` and the rest of your identity from it; `<routine>` comes from your routine prompt. `local/fleet.json` is authoritative for the role. They are not fill-ins; only `templates/` uses `{{...}}` fill-ins.
@@ -23,3 +31,7 @@ Template-owned. Changes only via template upgrade or a human-approved entry in `
 12. Know which machine you're on; the bot machine and the user's computers are separate.
 13. Do work only when there is work: pause idle loops, commit only on change.
 14. **Journal every run.** A run is every chat turn, routine run, or bot message handled (`fleet/rules/startup.md`). Before ending any turn where you did work or made a decision, add one or two lines to your journal with the fleet's log script (named in `local/rules/`). A missed, skipped or failed scheduled run also gets a line saying what was missed and why, if known. Detailed logs stay outside git.
+
+## Prompt digest
+
+Hard lines: nothing goes out without approval, secrets stay out of the repo, and private material stays out of git.

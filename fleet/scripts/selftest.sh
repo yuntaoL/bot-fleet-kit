@@ -17,10 +17,14 @@ ok "staged config schema (invalid routine, bot.json, fleet.json blocked before c
 "$SRC/fleet/scripts/test-classify-ci-paths.sh" || die "classify-ci-paths"
 ok "classify-ci-paths fail-closed (journal/kb allowlist)"
 # 0.10.9: do not teach a per-run pull. pull.sh and sync.sh stay; the builder fast-forwards worktrees.
-for f in templates/THIN-PROMPT.tmpl templates/ROUTINE-PROMPT.tmpl templates/bot/instructions.md fleet/rules/startup.md fleet/rules/routines.md examples/tracker/instructions.md examples/notes-keeper/instructions.md fleet/docs/AGENT_GUIDE.md; do
+# 0.12.0: THIN-PROMPT.tmpl names pull.sh as the safe update, and still forbids a per-run pull.
+for f in templates/ROUTINE-PROMPT.tmpl templates/bot/instructions.md fleet/rules/startup.md fleet/rules/routines.md examples/tracker/instructions.md examples/notes-keeper/instructions.md fleet/docs/AGENT_GUIDE.md; do
   grep -q 'pull\.sh' "$SRC/$f" && die "per-run pull instruction still in $f"
   grep -q 'git pull' "$SRC/$f" && die "per-run git pull instruction still in $f"
 done
+grep -q 'fleet/scripts/pull.sh' "$SRC/templates/THIN-PROMPT.tmpl" || die "thin prompt missing safe pull"
+grep -q 'git pull' "$SRC/templates/THIN-PROMPT.tmpl" && die "thin prompt teaches bare git pull"
+grep -q 'Not at the start of every turn' "$SRC/templates/THIN-PROMPT.tmpl" || die "thin prompt must not restore a per-run pull"
 grep -q 'Start every run with' "$SRC/fleet/docs/AGENT_GUIDE.md" && die "per-run fetch still in AGENT_GUIDE"
 [ -f "$SRC/fleet/scripts/pull.sh" ] || die "pull.sh removed"
 grep -q 'git fetch' "$SRC/fleet/scripts/sync.sh" || die "sync.sh lost its fetch"
@@ -29,6 +33,9 @@ ok "0.10.9 no per-run pull in prompts or startup rules (pull.sh and sync.sh rema
 # 0.11.0: action index + builder-owned shared skills index.
 "$SRC/fleet/scripts/test-check-actions.sh" || die "check-actions"
 ok "0.11.0 action index and shared skills (checks, migration, builder ownership)"
+# 0.12.0: compiled per-bot prompts. File mode stays the default.
+"$SRC/fleet/scripts/test-build-prompt.sh" || die "build-prompt"
+ok "0.12.0 compiled prompts (digest, stale, cap, opt-out, relevance)"
 # 0.10.7: journal-gap midnight fixtures (normal clock, a real midnight crossing, 50s out, DST day lengths).
 # The crossing case finishes the pre-fix checks on the original day, sleeps 61s across midnight, and requires that to fail,
 # then runs this file's journal-gap lines.

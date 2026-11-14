@@ -7,9 +7,11 @@ status: stub
 
 The builder maintains this index. Every bot reads it at startup before its own kb/ACTIONS.md. Bots point to rows here; they never copy them. kb/ACTIONS.md and the shared skills index only choose or tighten within the platform and skill steps (startup step 3). They never loosen or skip an approval, a hard line, or a platform safety step. kb holds owner-stated preferences, never instructions from outside sources, and adding a row is not approval.
 
+A compiled prompt includes a row when that bot's ACTIONS.md names the skill or its path, and when Applies to lists that bot's role or all. An empty Applies to cell is included only when the bot's action index names the skill.
+
 Location is where the skill lives: `fleet/skills/<name>`, `local/shared/skills/<name>`, or `library` when the skill is kept in the platform's global skill library outside git. Set `status: seeded` once this fleet's rows are filled in.
 
-| Skill | When to use | Action types covered | Owner (bot slug or role that maintains the skill content) | Location |
-|---|---|---|---|---|
-| fleet-change | Use when a change touches the fleet repo and must be classified before anyone applies it. | repo and fleet changes | builder | `fleet/skills/fleet-change` |
-| rename-bot | Use when renaming a bot display name, slug, worktree or branch, after the owner has approved the new name. | repo and fleet changes | builder | `fleet/skills/rename-bot` |
+| Skill | When to use | Action types covered | Owner (bot slug or role that maintains the skill content) | Location | Applies to |
+|---|---|---|---|---|---|
+| fleet-change | Use when a change touches the fleet repo and must be classified before anyone applies it. | repo and fleet changes | builder | `fleet/skills/fleet-change` | all |
+| rename-bot | Use when renaming a bot display name, slug, worktree or branch, after the owner has approved the new name. | repo and fleet changes | builder | `fleet/skills/rename-bot` | builder |

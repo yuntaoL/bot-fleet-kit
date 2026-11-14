@@ -12,4 +12,6 @@ bots/<slug>/kb/ACTIONS.md     action index: kb files and skills to read before e
 ```
 Rules: read INDEX first, open only what you need; one topic per file with front matter; update the parent INDEX in the same commit; platform memory holds pointers only, never the only copy. Before an outside action, read `local/shared/SHARED-SKILLS.md`, then `bots/<slug>/kb/ACTIONS.md`. Bots point at shared rows; they do not copy them. Confidential material never goes in git (see `fleet/scripts/confidential-scan.sh`).
 
+Compiled prompts (0.12.0, opt-in) embed one bot's action index and only the shared rows that apply to it. A row applies when that bot's ACTIONS.md names the skill or its path, or when Applies to lists the bot's role or `all`. An empty Applies to cell is included only by that reference. See [COMPILED-PROMPTS.md](COMPILED-PROMPTS.md).
+
 `init-fleet.sh` creates `local/registry/INDEX.md`, `local/shared/INDEX.md` and `local/shared/SHARED-SKILLS.md` only if missing. `validate.sh` warns (never fails) on INDEX rows pointing at missing files and kb files without front matter. `check-actions.sh` fails when ACTIONS.md or the shared index is missing or a row points at a missing file, and warns on an unindexed pref, service or skill and on a stub index.

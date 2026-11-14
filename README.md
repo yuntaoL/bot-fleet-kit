@@ -87,7 +87,8 @@ The git side of both phases is tested end to end by `fleet/scripts/selftest.sh` 
 
 | Piece | What it does | Status |
 |---|---|---|
-| Thin prompt | `templates/THIN-PROMPT.tmpl`, rendered per bot by `render-prompt.sh`: go to your worktree, read your rule layers and state, follow them, write back | ✅ |
+| Thin prompt | `templates/THIN-PROMPT.tmpl`, rendered per bot by `render-prompt.sh`: go to your worktree, read your rule layers and state, follow them, write back. To update the worktree, use `fleet/scripts/pull.sh` (not at the start of every turn) | ✅ |
+| Compiled prompt (opt-in) | `prompt_mode: compiled` embeds the pre-action routine and that bot's action index (`build-prompt.sh`). Default `files` keeps the thin prompt. [COMPILED-PROMPTS.md](fleet/docs/COMPILED-PROMPTS.md) | ✅ |
 | Rule layers | `fleet/rules/common.md` → `local/overrides.md` → `local/rules/` → role → `bots/<slug>/rules.md` | ✅ |
 | Roles | Manager, builder, worker, retired defaults in `fleet/roles/` | ✅ |
 | Ownership | `fleet/OWNERS.json`, enforced by `check-boundary.sh` (pre-commit) and `validate.sh` (CI) | ✅ |
