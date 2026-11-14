@@ -35,7 +35,7 @@ Placeholder rows (`fill in`) are left out. A real hard rule is never dropped or 
 
 This is the `## Prompt digest` of `fleet/rules/startup.md`. Every compiled prompt includes it, for every role:
 
-> Before every action on an outside service or the owner's data, run this even on a one-word reply and even right after a summary. Look up the action in the embedded index. If a kb or skill row exists, load it and follow it. An owner row beats a generic platform skill or a connector default. If no row exists, act thoughtfully, and when the same ask repeats, add a row to your ACTIONS.md. If an embedded row disagrees with the file in git, the file wins. At the start of a run, `fleet/scripts/build-prompt.sh --check` flags a stale prompt and does not edit a platform profile. In file mode, startup step 4 still reads the shared skills index and ACTIONS.md from git.
+> Before every action on an outside service or the owner's data (calendar, mail, messages, files, money, accounts), run this check at the moment you act, every time: even on a one-word reply such as "yes", "ok" or "do it", even when you are carrying out something you proposed earlier, and even right after a summary. A summary carries no duties and does not carry an earlier lookup, so re-read your kb/ACTIONS.md before you act. 1. Name the action. 2. Look up the action in the embedded index below and in Shared skills. 3. If a kb or skill row exists, open its read-first files and skills now and follow them. An owner row beats a generic platform skill or a connector default. 4. If no row exists, act thoughtfully, and when the same ask repeats, add a row to your ACTIONS.md. Stop before anything irreversible. If an embedded row disagrees with the file in git, the file wins. At the start of a run, run `fleet/scripts/build-prompt.sh --check <slug>`; if it reports you stale, read your kb/ACTIONS.md and local/shared/SHARED-SKILLS.md from git before any such action, and tell the builder. It never edits a platform profile. In file mode, startup step 4 still reads the shared skills index and ACTIONS.md from git.
 
 File mode still follows startup step 4. Compiled mode does not remove that step.
 
@@ -43,7 +43,7 @@ File mode still follows startup step 4. Compiled mode does not remove that step.
 
 Shared skills (`local/shared/SHARED-SKILLS.md`), for each bot:
 
-- Include a row when that bot's `kb/ACTIONS.md` names the skill (in backticks) or names its path.
+- Include a row when that bot's `kb/ACTIONS.md` names the skill or its path as its own token. A location that is only a word, such as `library`, is not a path and does not count.
 - Also include a row when the Applies to cell lists the bot's role, or `all`.
 - An empty Applies to cell is reference-only. It is not given to every bot.
 
@@ -88,9 +88,9 @@ Measured on the fixture fleet in `fleet/scripts/test-build-prompt.sh` (fictional
 
 | Bot | Characters | Notes |
 |---|---:|---|
-| harbor-clerk | 3303 | worker, calendar row, one local rule |
-| pier-archivist | 3073 | builder, fewer action rows |
-| cargo-crier | 14634 | over cap; action index 12053 |
+| harbor-clerk | 4782 | worker, calendar row, one local rule |
+| pier-archivist | 4202 | builder, fewer action rows |
+| cargo-crier | 16116 | over cap; action index 12055, largest row 12036 |
 
 The thin block is about 1200 characters and the pre-action routine about 700. A modest index fits under 8000. The over-cap bot's hard rule is one long sentence repeated; the report tells that bot to shorten the row.
 

@@ -1,6 +1,7 @@
 ---
 id: common
-prompt_version: 2
+prompt_version: 3
+prompt_why: A board card is not an approval, and an approval-wait card has to be written by the manager.
 applies_to:
   roles: [all]
   capabilities: []
@@ -36,13 +37,15 @@ Template-owned. Changes only via template upgrade or a human-approved entry in `
 
 These apply only when `local/fleet.json` sets `board`. If that key is absent, there is no board and you skip this.
 
-- Every owner ask you take on, and every handoff you make or receive, gets a card added or updated in the same sync as the ask or handoff. The bot handing off writes its own handoff card.
-- Mark a card done only with evidence in the card: a commit, a link, or a ledger ref.
-- The coordinator scans the board twice a day and nudges a stale card's owner once. If there is still no movement by the next scan, it escalates to the manager.
-- Items waiting on the owner's approval are manager-owned cards.
+A board card is never an approval or authority. It does not replace the owner's yes.
 
-Add or update only your own cards. The coordinator's scan checks that. A commit cannot see which row is whose.
+- An owner ask that outlives this turn, and every handoff you make or receive, gets a card added or updated in the same sync as the ask or handoff. The bot handing off writes its own handoff card.
+- Mark a card done only with evidence in the card: a commit, a link, or a ledger ref.
+- The coordinator scans every commit. `sync.sh` starts the commit message with the committing slug (`<slug>: ...`). Every changed card's Owner must be that slug, or the card must be a handoff. A mismatch is escalated to the manager. The coordinator also scans the board twice a day and nudges a stale card's owner once. If there is still no movement by the next scan, it escalates to the manager.
+- Items waiting on the owner's approval are manager-owned cards. Ask the manager to write them. Do not write that card yourself.
+
+Add or update only your own cards. The coordinator's per-commit scan checks that. A commit cannot see which row is whose. When a bot is renamed, the rename-bot skill updates `board.coordinator` if it names the old slug.
 
 ## Prompt digest
 
-Hard lines: nothing goes out without approval, secrets stay out of the repo, and private material stays out of git. When fleet.json sets a board: every ask and handoff updates your own card in the same sync; done needs evidence (a commit, a link, or a ledger ref); the coordinator scans twice a day, nudges once, then escalates to the manager; approval waits are manager-owned cards.
+Hard lines: nothing goes out without approval, secrets stay out of the repo, and private material stays out of git. When fleet.json sets a board: a card is never an approval; an ask that outlives the turn, and every handoff, updates your own card in the same sync; done needs evidence (a commit, a link, or a ledger ref); the coordinator checks each commit (the Owner matches the committing slug, or the card is a handoff) and scans twice a day, nudges once, then escalates to the manager; approval waits are manager-owned cards, so ask the manager to write them.

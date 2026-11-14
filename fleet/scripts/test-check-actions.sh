@@ -32,8 +32,9 @@ grep -q '| rename-bot |' "$SRC/templates/local/shared/SHARED-SKILLS.md" || fail 
 grep -q '"builder"' "$SRC/fleet/schema/owners.schema.json" || fail "owner enum missing builder"
 grep -q 'local/shared/SHARED-SKILLS.md' "$SRC/fleet/OWNERS.json" || fail "OWNERS missing shared index rule"
 python3 -c 'import json; r=json.load(open("'"$SRC"'/fleet/OWNERS.json"))["rules"]; i=next(k for k,x in enumerate(r) if x["path"]=="local/shared/SHARED-SKILLS.md"); j=next(k for k,x in enumerate(r) if x["path"]=="local/**"); assert i<j and r[i]["owner"]=="builder"' || fail "builder rule is not before local/**"
-# Prompts stay thin: they already route through startup.md.
-grep -q 'ACTIONS.md' "$SRC/templates/THIN-PROMPT.tmpl" && fail "THIN-PROMPT should not gain ACTIONS.md"
+# 0.12.0 file mode names kb/ACTIONS.md in one pre-action sentence. It does not embed the index.
+grep -q 'open your kb/ACTIONS.md' "$SRC/templates/THIN-PROMPT.tmpl" || fail "thin prompt missing pre-action line"
+grep -q '| Action |' "$SRC/templates/THIN-PROMPT.tmpl" && fail "THIN-PROMPT should not embed the action index" || true
 grep -q 'ACTIONS.md' "$SRC/templates/ROUTINE-PROMPT.tmpl" && fail "ROUTINE-PROMPT should not gain ACTIONS.md"
 pass "startup, templates, OWNERS, prompts"
 
@@ -51,6 +52,7 @@ cp -a "$SRC/fleet/skills/." "$REPO/fleet/skills/"
 cp "$SRC/fleet/docs/CONTRIBUTING.md" "$REPO/fleet/docs/CONTRIBUTING.md"
 cp "$SRC/fleet/OWNERS.json" "$REPO/fleet/OWNERS.json"
 cp "$SRC/fleet/scripts/owners.py" "$REPO/fleet/scripts/owners.py"
+cp "$SRC/fleet/scripts/schema_check.py" "$REPO/fleet/scripts/schema_check.py"
 cp "$SRC/fleet/scripts/check-boundary.sh" "$REPO/fleet/scripts/check-boundary.sh"
 cp "$SRC/templates/bot/kb/ACTIONS.md" "$REPO/templates/bot/kb/ACTIONS.md"
 cp "$SRC/templates/local/shared/SHARED-SKILLS.md" "$REPO/templates/local/shared/SHARED-SKILLS.md"
@@ -701,6 +703,7 @@ pass "sync.sh: builder stages the shared index; manager default sync does not"
 AUDIT="$T/auditrepo"
 mkdir -p "$AUDIT/fleet/scripts" "$AUDIT/local/shared" "$AUDIT/local"
 cp "$SRC/fleet/scripts/owners.py" "$AUDIT/fleet/scripts/owners.py"
+cp "$SRC/fleet/scripts/schema_check.py" "$AUDIT/fleet/scripts/schema_check.py"
 cp "$SRC/fleet/OWNERS.json" "$AUDIT/fleet/OWNERS.json"
 printf 'index\n' > "$AUDIT/local/shared/SHARED-SKILLS.md"
 printf 'note\n' > "$AUDIT/local/overrides.md"

@@ -8,9 +8,12 @@
 #   no paths, active builder (HEAD:local/fleet.json role builder, status not retired or paused):
 #     bots/<fleet.bot>/, local/shared/SHARED-SKILLS.md, and local/prompts/
 #   no paths, anyone else: bots/<fleet.bot>/
-# Every sync also stages bots/<fleet.bot>/journal (when that directory exists) and the configured
-# board file when this bot may write the change. Path arguments used to leave the journal unstaged,
-# and a dirty board the same way; git rebase then refused to start.
+# Every sync also stages bots/<fleet.bot>/journal (when that directory exists). Path arguments
+# used to leave the journal unstaged, and rebase then refused. A path sync does not stage the
+# board: a half-edited board must not ride along. A default sync (no paths) stages the board
+# when this bot may write that change.
+# A foreign path already staged is unstaged. A bot path whose mode is not 100644
+# stays staged and the commit is refused. owners.py check runs here even when the hook is off.
 # Untracked files inside the staged paths are staged. A tracked edit outside them stays unstaged;
 # git rebase then refuses to start, so that run does not push.
 # 0.10.8: before commit, staged bots/<slug>/routines/*.json, bots/<slug>/bot.json and local/fleet.json are
@@ -58,15 +61,50 @@ if [ "$active_builder" = 1 ] && [ -f local/shared/SHARED-SKILLS.md ]; then git a
 if [ "$active_builder" = 1 ] && [ -d local/prompts ]; then git add -- local/prompts; fi
 # Journal, with or without path arguments. Leaving it unstaged makes rebase refuse.
 if [ -d "bots/$me/journal" ]; then git add -- "bots/$me/journal" 2>/dev/null || true; fi
-# Configured board, only when this bot may write the worktree change (create vs update).
-board_path="$(BOT_NAME="$me" BOT_ROLE="$role" python3 fleet/scripts/owners.py board-stage 2>/dev/null || true)"
-if [ -n "$board_path" ]; then git add -- "$board_path"; fi
+# Default sync only. A path sync must not pick up a half-edited board.
+if [ "$default" = 1 ]; then
+  board_path="$(BOT_NAME="$me" BOT_ROLE="$role" python3 fleet/scripts/owners.py board-stage 2>/dev/null || true)"
+  if [ -n "$board_path" ]; then git add -- "$board_path"; fi
+fi
+# Drop a foreign path before the schema check, so another bot's invalid JSON does not block this commit.
+# A non-100644 path stays in the index: the schema check and the mode check both have to see it.
+mode_bad=0
+while IFS=$'\t' read -r st path; do
+  [ -n "${path:-}" ] || continue
+  err="$(printf '%s\t%s\n' "$st" "$path" | BOT_NAME="$me" BOT_ROLE="$role" python3 fleet/scripts/owners.py check 2>&1)" && rc=0 || rc=$?
+  if [ "$rc" != 0 ]; then
+    if printf '%s\n' "$err" | grep -q 'not a regular file'; then
+      printf '%s\n' "$err" >&2
+      mode_bad=1
+    else
+      # A symlink or gitlink outside this bot's tree is still refused. Unstaging it would
+      # put the previous blob back and hide the mode from the schema check.
+      mode="$(git ls-files --stage -- "$path" | awk 'NR==1 { print $1 }')"
+      if [ -n "$mode" ] && [ "$mode" != "100644" ] && [ "$mode" != "100755" ]; then
+        printf 'check-boundary: %s: staged mode %s is not a regular file (100644); symlink and gitlink are refused\n' "$path" "$mode" >&2
+        mode_bad=1
+      else
+        git reset -q -- "$path" 2>/dev/null || true
+      fi
+    fi
+  fi
+done < <(git diff --cached --name-status --no-renames)
+if ! git diff --cached --quiet; then
+  if ! fleet/scripts/check-staged-config.sh; then
+    echo "sync: refusing commit and push; staged configuration JSON failed schema check" >&2
+    exit 1
+  fi
+fi
+if [ "$mode_bad" = 1 ]; then
+  echo "sync: refusing commit and push; ownership check failed" >&2
+  exit 1
+fi
+if ! git diff --cached --name-status --no-renames | BOT_NAME="$me" BOT_ROLE="$role" python3 fleet/scripts/owners.py check; then
+  echo "sync: refusing commit and push; ownership check failed" >&2
+  exit 1
+fi
 if git diff --cached --quiet; then
   echo "sync: no change"; git fetch -q origin main || true; git rebase -q origin/main 2>/dev/null || git rebase --abort 2>/dev/null || true; exit 0
-fi
-if ! fleet/scripts/check-staged-config.sh; then
-  echo "sync: refusing commit and push; staged configuration JSON failed schema check" >&2
-  exit 1
 fi
 BOT_NAME="$me" BOT_ROLE="$role" git commit -qm "$me: $msg"
 for i in 1 2 3 4 5 6; do

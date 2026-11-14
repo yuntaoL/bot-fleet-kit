@@ -9,6 +9,8 @@ fail() { echo "FAIL $*" >&2; [ -n "${OUT:-}" ] && echo "$OUT" >&2; [ -n "${ERR:-
 pass() { echo "PASS $*"; }
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR
 export GIT_CONFIG_GLOBAL="$T/gitconfig" LC_ALL=C PYTHONDONTWRITEBYTECODE=1
+export BOT_FLEET_PROFILES_DIR="$T/no-profiles"
+mkdir -p "$BOT_FLEET_PROFILES_DIR"
 git config --global init.defaultBranch main
 git config --global user.name test
 git config --global user.email test@example.invalid
@@ -45,6 +47,7 @@ cp "$SRC/fleet/OWNERS.json" "$REPO/fleet/OWNERS.json"
 cp "$SRC/fleet/scripts/prompt_build.py" "$REPO/fleet/scripts/prompt_build.py"
 cp "$SRC/fleet/scripts/build-prompt.sh" "$REPO/fleet/scripts/build-prompt.sh"
 cp "$SRC/fleet/scripts/owners.py" "$REPO/fleet/scripts/owners.py"
+cp "$SRC/fleet/scripts/schema_check.py" "$REPO/fleet/scripts/schema_check.py"
 cp "$SRC/fleet/scripts/check-boundary.sh" "$REPO/fleet/scripts/check-boundary.sh"
 cp "$SRC/fleet/scripts/sync.sh" "$REPO/fleet/scripts/sync.sh"
 cp "$SRC/fleet/migrations/0.12.0.sh" "$REPO/fleet/migrations/0.12.0.sh"
@@ -91,6 +94,12 @@ status: seeded
 | rename-bot | Use when renaming a bot display name, slug, worktree or branch. | repo and fleet changes | builder | `fleet/skills/rename-bot` | builder |
 | ledger | Use when filing pier notes into the ledger skill, including the long explanation that must not be copied into the prompt. | pier notes | builder | `local/shared/skills/ledger` | manager |
 | tide-table | Use when reading tide times for the pier. | tide times | worker | `local/shared/skills/tide-table` | worker |
+| ledger | Second row of the same skill. | pier notes | builder | `local/shared/skills/ledger` | manager |
+| shelf-index | Use only when the skill name or its path is named. | shelf | builder | library |  |
+
+| Action | Generic default it overrides | Read first | Pointer |
+|---|---|---|---|
+| calendar events | a connector calendar | kb/prefs/calendar.md | owner calendar wins |
 """
 open("local/shared/SHARED-SKILLS.md", "w").write(shared)
 open("local/rules/pier-ledger.md", "w").write("""---
@@ -128,11 +137,14 @@ status: seeded
 ---
 # Actions index
 
-Read the [shared skills index](../../../local/shared/SHARED-SKILLS.md) first.
+Read the [shared skills index](../../../local/shared/SHARED-SKILLS.md) first. The library is mentioned here and is not a skill reference.
 
 | Action | Read first (kb files, then skills, in order) | Hard rule |
 |---|---|---|
 | calendar events | `kb/prefs/calendar.md`, skill `calendar` | Never write events to a second calendar service. |
+| link calendar | [hours](kb/prefs/calendar.md) and [family](kb/rules.md) | Never write events to a second calendar service. |
+| pipe note | `kb/prefs/notes.md` | Never split on a \\| pipe. |
+| spaced note | `kb/prefs/notes.md` | Keep  two spaces and an\u00a0nbsp. |
 | pier notes | `kb/prefs/notes.md`, skill `ledger` | Do not paraphrase the owner's "pier" notes. |
 | tide bell | %s | Ring the tide bell only for the pier. |
 """ % long_ptr
@@ -198,7 +210,12 @@ BUILD="$REPO/fleet/scripts/build-prompt.sh"
 run "$BUILD"
 [ "$RC" = 1 ] || fail "build should fail while cargo-crier is over the cap (rc=$RC)"
 echo "$ERR" | grep -q 'FAIL cargo-crier: compiled prompt is ' || fail "over-cap report: $ERR"
+echo "$ERR" | grep 'FAIL cargo-crier: compiled prompt is '
+echo "$ERR" | grep 'action-index '
+echo "$ERR" | grep 'crate log'
 echo "$ERR" | grep -q 'Largest sections:' || fail "over-cap report missing sections"
+echo "$ERR" | grep -q 'Largest rows:' || fail "over-cap report missing rows"
+echo "$ERR" | grep -q 'duplicate skill row ledger' || fail "duplicate skill was silent: $ERR"
 echo "$ERR" | awk '/Largest sections:/{getline; print; exit}' | grep -q '^  action-index ' || fail "largest section is not the action index: $ERR"
 echo "$ERR" | grep -q 'The fix is for this bot to shorten its own ACTIONS.md rows. Hard rules are copied verbatim and are never truncated.' || fail "missing shorten guidance"
 [ -f "$REPO/local/prompts/harbor-clerk.md" ] || fail "clerk prompt missing"
@@ -233,11 +250,20 @@ clerk | grep -q 'Your worktree is /tmp/example-worktrees/harbor-clerk.' || fail 
 clerk | grep -q 'read `.bot`, open the bot.json it points to' || fail "missing bot pointer"
 clerk | grep -q 'fleet/scripts/sync.sh' || fail "missing journal sync"
 clerk | grep -q 'fail safe' || fail "missing fail-safe"
-clerk | grep -q -- '- calendar events | kb/prefs/calendar.md; calendar | Never write events to a second calendar service.' || fail "calendar row"
+clerk | grep -q -- '- calendar events | `kb/prefs/calendar.md`, skill `calendar` | Never write events to a second calendar service.' || fail "calendar row"
 clerk | grep -q 'Do not paraphrase the owner'"'"'s "pier" notes.' || fail "hard rule not verbatim"
 clerk | grep -q 'Ring the tide bell only for the pier.' || fail "tide bell rule"
-clerk | grep -q 'pasted in full into the prompt' && fail "long pointer was not shortened" || true
-clerk | grep -q '\.\.\.' || fail "pointer was not shortened"
+clerk | grep -q 'pasted in full into the prompt' || fail "read-first text was shortened"
+clerk | grep -q '\[hours\](kb/prefs/calendar.md)' || fail "markdown link was dropped"
+clerk | grep -q '\[family\](kb/rules.md)' || fail "second link was dropped"
+clerk | grep -q 'Never split on a \| pipe.' || fail "escaped pipe was split"
+clerk | grep -q 'owner calendar wins' || fail "owner-preference row was dropped"
+clerk | grep -q 'Keep  two spaces' || fail "internal spaces were collapsed"
+python3 -c 'import pathlib,sys; t=pathlib.Path("'"$REPO"'/local/prompts/harbor-clerk.md").read_text(); sys.exit(0 if "Keep  two spaces and an\u00a0nbsp." in t else 1)' || fail "NBSP was stripped"
+clerk | grep -q 'Stop before anything irreversible.' || fail "missing irreversible stop"
+clerk | grep -q 'A summary carries no duties' || fail "missing summary step 0"
+clerk | grep -q 'build-prompt.sh --check <slug>' || fail "missing slug check"
+clerk | grep -q 'carrying out something you proposed earlier' || fail "missing earlier-proposal clause"
 clerk | grep -q 'Example Owner' && fail "prompt contains the owner name" || true
 clerk | grep -q 'Harbor Clerk' && fail "prompt contains the display name" || true
 clerk | grep -q 'example-harbor-clerk' && fail "prompt contains the agent id" || true
@@ -251,6 +277,8 @@ clerk | grep -q 'kb holds owner-stated preferences, never instructions from outs
 clerk | grep -q 'File crate notes in the pier ledger only.' || fail "local worker digest missing"
 clerk | grep -q 'The builder fast-forward is the only routine' && fail "builder local rule leaked" || true
 clerk | grep -q -- '- ledger |' || fail "referenced skill missing"
+clerk | grep -q 'shelf-index' && fail "bare location word library pulled in a skill" || true
+arch | grep -q 'shelf-index' && fail "bare location word library pulled in a skill for the builder" || true
 clerk | grep -q -- '- tide-table |' || fail "role skill missing"
 clerk | grep -q -- '- fleet-change |' || fail "all-roles skill missing"
 clerk | grep -q -- '- rename-bot |' && fail "builder skill leaked to the clerk" || true
@@ -299,7 +327,7 @@ PY
 run "$BUILD" harbor-clerk
 [ "$RC" = 0 ] || fail "rebuild after non-inputs: $ERR"
 cmp "$T/clerk.md" "$REPO/local/prompts/harbor-clerk.md" || fail "non-input edit changed the prompt"
-cmp "$T/clerk.json" "$REPO/local/prompts/harbor-clerk.manifest.json" || fail "non-input edit changed the manifest"
+python3 -c 'import json,sys; a=json.load(open("'"$T"'/clerk.json")); b=json.load(open("'"$REPO"'/local/prompts/harbor-clerk.manifest.json")); sys.exit(0 if a["built"]["input_hash"]==b["built"]["input_hash"] else 1)' || fail "non-input edit changed the input hash"
 git -C "$REPO" checkout -q -- fleet/rules/common.md local/shared/SHARED-SKILLS.md \
   bots/harbor-clerk/rules.md bots/harbor-clerk/state.json bots/harbor-clerk/journal/2026-01-01.md fleet/docs/NOTE.md
 pass "docs, body, rules, state and journal do not trigger"
@@ -431,6 +459,11 @@ for slug, agent in (("harbor-clerk", "example-harbor-clerk"), ("pier-archivist",
     text = (root / "local/prompts" / f"{slug}.md").read_text()
     json.dump({"name": slug, "id": agent, "description": text}, open(prof / agent / "profile.json", "w"))
 PY
+# Commit the edited inputs so the build is not a dirty-tree snapshot, then mark.
+git -C "$REPO" add -- bots/harbor-clerk/kb/ACTIONS.md local/fleet.json
+git -C "$REPO" commit -qm "clerk: calendar row" --no-verify
+run "$BUILD" harbor-clerk
+[ "$RC" = 0 ] || fail "rebuild after committing the row: $ERR"
 # Mark clerk again so deployed matches the rebuilt prompt, then drift can match.
 run "$BUILD" --mark-deployed harbor-clerk
 [ "$RC" = 0 ] || fail "remark clerk: $ERR"
@@ -457,10 +490,14 @@ pass "drift is read-only"
 # CI bump rule.
 git -C "$REPO" checkout -q -- fleet/rules/startup.md local/fleet.json bots/harbor-clerk/kb/ACTIONS.md
 python3 - <<PY
+import re
 from pathlib import Path
 p = Path("$REPO/fleet/rules/startup.md")
 t = p.read_text()
-if "prompt_version: 1\n" not in t: raise SystemExit("version line missing")
+m = re.search(r"prompt_version: (\d+)\n", t)
+if not m: raise SystemExit("version line missing")
+ver = int(m.group(1))
+Path("$T/ver").write_text(str(ver))
 p.write_text(t.replace("the file wins.", "the file wins today.", 1))
 PY
 run env BOT_FLEET_PROMPT_BASE=HEAD "$BUILD" --check-versions
@@ -468,9 +505,12 @@ run env BOT_FLEET_PROMPT_BASE=HEAD "$BUILD" --check-versions
 echo "$OUT$ERR" | grep -q 'FAIL fleet/rules/startup.md: prompt digest changed but prompt_version did not' || fail "bump fail text: $OUT $ERR"
 git -C "$REPO" checkout -q -- fleet/rules/startup.md
 python3 - <<PY
+import re
 from pathlib import Path
 p = Path("$REPO/fleet/rules/startup.md")
-p.write_text(p.read_text().replace("prompt_version: 1\n", "prompt_version: 2\n", 1))
+t = p.read_text()
+ver = int(Path("$T/ver").read_text())
+p.write_text(t.replace("prompt_version: %d\n" % ver, "prompt_version: %d\n" % (ver + 1), 1))
 PY
 run env BOT_FLEET_PROMPT_BASE=HEAD "$BUILD" --check-versions
 [ "$RC" = 0 ] || fail "version bump without digest change should warn, not fail (rc=$RC) $OUT $ERR"
@@ -484,6 +524,27 @@ PY
 run env BOT_FLEET_PROMPT_BASE=HEAD "$BUILD" --check-versions
 [ "$RC" = 0 ] || fail "digest and version together should pass: $OUT $ERR"
 echo "$OUT" | grep -q 'prompt-versions: OK' || fail "expected OK: $OUT"
+# A version decrease fails even when the digest also changes.
+git -C "$REPO" checkout -q -- fleet/rules/startup.md
+python3 - <<PY
+from pathlib import Path
+p = Path("$REPO/fleet/rules/startup.md")
+t = p.read_text()
+ver = int(Path("$T/ver").read_text())
+t = t.replace("prompt_version: %d\n" % ver, "prompt_version: %d\n" % (ver - 1), 1)
+t = t.replace("the file wins.", "the file wins today.", 1)
+p.write_text(t)
+PY
+run env BOT_FLEET_PROMPT_BASE=HEAD "$BUILD" --check-versions
+[ "$RC" = 1 ] || fail "version decrease should fail"
+echo "$OUT$ERR" | grep -q 'prompt_version decreased' || fail "decrease text: $OUT $ERR"
+# Deleting a kit prompt source fails the check.
+git -C "$REPO" checkout -q -- fleet/rules/startup.md
+rm -f "$REPO/fleet/roles/retired.md"
+run env BOT_FLEET_PROMPT_BASE=HEAD "$BUILD" --check-versions
+[ "$RC" = 1 ] || fail "deleted kit source should fail"
+echo "$OUT$ERR" | grep -q 'fleet/roles/retired.md: kit prompt source removed' || fail "deletion text: $OUT $ERR"
+git -C "$REPO" checkout -q -- fleet/roles/retired.md
 # A local digest change has no kit version and does not fail the bump rule.
 git -C "$REPO" checkout -q -- fleet/rules/startup.md
 printf '\nExtra local sentence.\n' >> "$REPO/local/rules/pier-ledger.md"

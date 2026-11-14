@@ -13,7 +13,7 @@ never writes a profile.
 
 Usage:
   prompt_build.py [slug...]
-  prompt_build.py --check [--json]
+  prompt_build.py --check [--json] [slug...]
   prompt_build.py --changelog
   prompt_build.py --mark-deployed <slug>
   prompt_build.py --check-versions
@@ -89,8 +89,49 @@ def norm_newlines(s):
     return s.replace("\r\n", "\n").replace("\r", "\n")
 
 
-def one_line(s):
-    return re.sub(r"\s+", " ", s).strip()
+def pad_strip(cell):
+    """Drop only the ASCII spaces that pad a markdown cell. Leave NBSP and inner spaces."""
+    start, end = 0, len(cell)
+    while start < end and cell[start] == " ":
+        start += 1
+    while end > start and cell[end - 1] == " ":
+        end -= 1
+    return cell[start:end]
+
+
+def split_cells(line):
+    """Split one markdown table row. Escaped \\| and pipes inside backticks stay in the cell."""
+    s = line.strip("\n")
+    if s.startswith("|"):
+        s = s[1:]
+    if s.endswith("|"):
+        s = s[:-1]
+    cells, buf, code = [], [], False
+    i = 0
+    while i < len(s):
+        ch = s[i]
+        if ch == "`":
+            code = not code
+            buf.append(ch)
+            i += 1
+            continue
+        if not code and ch == "\\" and i + 1 < len(s) and s[i + 1] == "|":
+            buf.append("\\|")
+            i += 2
+            continue
+        if not code and ch == "|":
+            cells.append(pad_strip("".join(buf)))
+            buf = []
+            i += 1
+            continue
+        buf.append(ch)
+        i += 1
+    cells.append(pad_strip("".join(buf)))
+    return cells
+
+
+def is_separator(cells):
+    return bool(cells) and all(re.fullmatch(r":?-{1,}:?", c.replace(" ", "")) for c in cells)
 
 
 def norm_block(s):
@@ -140,6 +181,8 @@ def parse_front_matter(text):
             data["id"] = val
         elif key == "prompt_version" and val:
             data["prompt_version_raw"] = val
+        elif key == "prompt_why" and val:
+            data["prompt_why"] = val.strip().strip("'\"")
     return data, body, True
 
 
@@ -180,6 +223,7 @@ def parse_source(path, text, kind):
         return base
     src = base
     src["id"] = fm.get("id", "")
+    src["prompt_why"] = fm.get("prompt_why") or ""
     src["applies_to"] = {
         "roles": sorted(set(fm.get("applies_to", {}).get("roles") or [])),
         "capabilities": sorted(set(fm.get("applies_to", {}).get("capabilities") or [])),
@@ -218,6 +262,17 @@ def parse_source(path, text, kind):
 
 def kit_paths():
     return sorted(glob.glob("fleet/rules/*.md") + glob.glob("fleet/roles/*.md"))
+
+
+def kit_paths_at(rev):
+    r = subprocess.run(["git", "ls-tree", "-r", "--name-only", rev], capture_output=True, text=True)
+    if r.returncode != 0:
+        return []
+    out = []
+    for p in r.stdout.splitlines():
+        if (p.startswith("fleet/rules/") or p.startswith("fleet/roles/")) and p.endswith(".md"):
+            out.append(p)
+    return out
 
 
 def local_paths():
@@ -296,7 +351,8 @@ def routine_error(digest):
     return None
 
 
-def parse_tables(text):
+def parse_tables(text, origin):
+    """Return [(header, data rows)]. Fail on a row whose cell count differs from its header."""
     lines = norm_newlines(text).split("\n")
     tables, i = [], 0
     while i < len(lines):
@@ -309,12 +365,18 @@ def parse_tables(text):
             i += 1
         rows = []
         for ln in block:
-            cells = [c.strip() for c in ln.strip().strip("|").split("|")]
-            if cells and all(re.fullmatch(r":?-{1,}:?", c.replace(" ", "")) for c in cells):
+            cells = split_cells(ln)
+            if is_separator(cells):
                 continue
             rows.append(cells)
-        if len(rows) >= 2:
-            tables.append((rows[0], rows[1:]))
+        if len(rows) < 2:
+            continue
+        header, data = rows[0], rows[1:]
+        width = len(header)
+        for cells in data:
+            if len(cells) != width:
+                raise ValueError("%s: row has %d cells, header has %d" % (origin, len(cells), width))
+        tables.append((header, data))
     return tables
 
 
@@ -326,102 +388,122 @@ def col_index(header, needle):
 
 
 def is_fill_in(cell):
-    t = one_line(cell).lower()
+    t = cell.strip(" ").lower()
     return t == "fill in" or t.startswith("fill in:")
 
 
-def pointers(cell):
-    found = []
-    for m in re.finditer(r"`([^`]+)`", cell):
-        p = m.group(1).strip()
-        p = re.sub(r"^bots/[a-z0-9-]+/", "", p)
-        p = re.sub(r"/SKILL\.md$", "", p)
-        if p and p not in found:
-            found.append(p)
-    if found:
-        return "; ".join(found)
-    text = one_line(cell)
-    if not text or is_fill_in(text):
+def cell_at(cells, i):
+    if i is None or i >= len(cells):
         return ""
-    if len(text) > 80:
-        return text[:77] + "..."
-    return text
+    return cells[i]
 
 
 def action_lines(text):
-    lines = []
-    for header, rows in parse_tables(text):
+    """One line per consumed row. Read-first and hard rule are the cell text, not a shortened form."""
+    lines, widths = [], []
+    for header, rows in parse_tables(text, "ACTIONS.md"):
         ac, rc, hc = col_index(header, "action"), col_index(header, "read"), col_index(header, "hard")
         if ac is None:
-            continue
+            raise ValueError("ACTIONS.md: table %s is not consumed (no Action column)" % header)
+        if hc is None:
+            raise ValueError("ACTIONS.md: table %s has no hard-rule column" % header)
         for cells in rows:
-            def get(i):
-                return cells[i] if i is not None and i < len(cells) else ""
-            read, hard = get(rc), get(hc)
+            read, hard, name = cell_at(cells, rc), cell_at(cells, hc), cell_at(cells, ac)
             if is_fill_in(read) and is_fill_in(hard):
                 continue
-            name = one_line(get(ac))
-            if not name:
+            if not name.strip(" "):
                 continue
-            lines.append("- %s | %s | %s" % (name, pointers(read), one_line(hard)))
-    return lines
+            line = "- %s | %s | %s" % (name, read, hard)
+            lines.append(line)
+            widths.append((name, len(line)))
+    return lines, widths
 
 
 def skill_rows(text):
-    rows_out = []
-    for header, rows in parse_tables(text):
+    """Skill rows, plus owner-preference rows from tables that have no Skill column.
+
+    A preference table ranks an owner row over a platform default. Every such row
+    is included for every bot. A table that is neither is an error.
+    """
+    rows_out, prefs = [], []
+    for header, rows in parse_tables(text, "SHARED-SKILLS.md"):
         sc = col_index(header, "skill")
-        if sc is None:
-            continue
         ac = col_index(header, "action")
         lc = col_index(header, "location")
-        wc = col_index(header, "when")
         pc = col_index(header, "applies")
-        for cells in rows:
-            def get(i):
-                return cells[i] if i is not None and i < len(cells) else ""
-            name = one_line(get(sc)).strip("`").lower()
-            if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", name):
-                continue
-            applies = [p.strip().lower() for p in get(pc).replace("`", "").split(",") if p.strip()]
-            rows_out.append({
-                "name": name,
-                "actions": one_line(get(ac)),
-                "location": one_line(get(lc)).strip("`"),
-                "when": get(wc),
-                "applies": applies,
-            })
-    return rows_out
+        hc = col_index(header, "hard")
+        rc = col_index(header, "read")
+        if sc is not None:
+            for cells in rows:
+                name = cell_at(cells, sc).strip(" `").lower()
+                if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", name):
+                    continue
+                applies = [p.strip(" `").lower() for p in cell_at(cells, pc).split(",") if p.strip(" `")]
+                rows_out.append({
+                    "name": name,
+                    "actions": cell_at(cells, ac),
+                    "location": cell_at(cells, lc).strip(" `"),
+                    "hard": cell_at(cells, hc) if hc is not None else None,
+                    "applies": applies,
+                })
+            continue
+        if ac is not None and (rc is not None or hc is not None or col_index(header, "override") is not None or col_index(header, "pointer") is not None):
+            for cells in rows:
+                prefs.append("- " + " | ".join(cells))
+            continue
+        raise ValueError("SHARED-SKILLS.md: table %s is not consumed" % header)
+    return rows_out, prefs
+
+
+def _token(text, token):
+    """True when token is its own word or path, not a substring of a longer token."""
+    if not token:
+        return False
+    return re.search(
+        r"(?<![A-Za-z0-9_./-])%s(?![A-Za-z0-9_./-])" % re.escape(token),
+        text,
+    ) is not None
 
 
 def referenced(actions_text, name, location):
-    if re.search(r"`%s`" % re.escape(name), actions_text):
+    """A reference is an exact skill name or an exact path, on a token boundary.
+
+    A location that is only a word, such as library, is not a path and does not match.
+    """
+    if name and _token(actions_text, name):
         return True
-    loc = (location or "").strip().strip("`")
-    if loc and loc in actions_text:
-        return True
-    if re.search(r"skills/%s(?:/|\b|`)" % re.escape(name), actions_text):
-        return True
-    return False
+    loc = (location or "").strip().strip("`").strip()
+    if not loc or "/" not in loc:
+        return False
+    skill_file = loc.rstrip("/") + "/SKILL.md"
+    return _token(actions_text, loc) or _token(actions_text, skill_file)
 
 
 def relevant_skills(actions_text, rows, role):
     """A row is relevant when ACTIONS.md names it, or Applies to lists the bot's role or all.
 
-    An empty Applies to cell is reference-only. It is not given to every bot.
+    An empty Applies to cell is reference-only. A repeated skill name is kept and warned.
     """
-    out, seen = [], set()
+    out, seen, warns = [], set(), []
     for row in rows:
+        if row["name"] in seen:
+            warns.append("duplicate skill row %s; both rows are kept" % row["name"])
+        seen.add(row["name"])
         ref = referenced(actions_text, row["name"], row["location"])
         role_hit = bool(row["applies"]) and ("all" in row["applies"] or role in row["applies"])
-        if (ref or role_hit) and row["name"] not in seen:
-            seen.add(row["name"])
+        if ref or role_hit:
             out.append(row)
-    return out
+    return out, warns
 
 
 def skill_lines(rows):
-    return ["- %s | %s | %s" % (r["name"], r["actions"], r["location"]) for r in rows]
+    lines = []
+    for r in rows:
+        line = "- %s | %s | %s" % (r["name"], r["actions"], r["location"])
+        if r.get("hard") is not None:
+            line += " | " + r["hard"]
+        lines.append(line)
+    return lines
 
 
 def render_thin(worktree):
@@ -484,10 +566,13 @@ def input_record(src):
     }
 
 
-def over_cap_report(slug, total, cap, sections):
+def over_cap_report(slug, total, cap, sections, row_sizes=None):
     ranked = sorted(((n, len(t)) for n, t in sections), key=lambda x: (-x[1], x[0]))
     lines = ["FAIL %s: compiled prompt is %d characters (cap %d)." % (slug, total, cap), "Largest sections:"]
     for name, n in ranked:
+        lines.append("  %s %d" % (name, n))
+    lines.append("Largest rows:")
+    for name, n in sorted(row_sizes or [], key=lambda x: (-x[1], x[0]))[:12]:
         lines.append("  %s %d" % (name, n))
     lines.append("The fix is for this bot to shorten its own ACTIONS.md rows. Hard rules are copied verbatim and are never truncated.")
     return "\n".join(lines)
@@ -547,8 +632,13 @@ def compile_bot(fleet, bot, items, cap):
             chosen.append(src)
     chosen.sort(key=lambda s: s["id"])
     gists = [(s["id"], s["digest"]) for s in chosen if s["id"] != "startup"]
-    actions = action_lines(actions_text)
-    skills = skill_lines(relevant_skills(actions_text, skill_rows(shared_text), role))
+    try:
+        actions, row_sizes = action_lines(actions_text)
+        skill_table, pref_lines = skill_rows(shared_text)
+        picked, skill_warns = relevant_skills(actions_text, skill_table, role)
+    except ValueError as e:
+        return {"ok": False, "reason": "bad-source", "error": str(e)}
+    skills = skill_lines(picked) + pref_lines
     prompt, sections = assemble(thin, startup["digest"], gists, actions, skills)
     payload = {
         "actions": actions,
@@ -579,6 +669,9 @@ def compile_bot(fleet, bot, items, cap):
         "cap": cap,
         "actions": actions,
         "skills": skills,
+        "row_sizes": row_sizes,
+        "warns": skill_warns,
+        "input_paths": [actions_path, rules_path, shared_path, "templates/THIN-PROMPT.tmpl", "local/fleet.json"] + [s["path"] for s in chosen],
     }
 
 
@@ -590,6 +683,20 @@ def kit_version():
 
 def head_commit():
     return git_out("rev-parse", "HEAD") or "none"
+
+
+def inputs_dirty(paths):
+    """True when a prompt input differs from HEAD, including an untracked input."""
+    paths = [p for p in dict.fromkeys(paths) if p]
+    if not paths:
+        return False
+    if git_out("rev-parse", "--verify", "HEAD") is None:
+        return True
+    diff = subprocess.run(["git", "diff", "--quiet", "HEAD", "--", *paths])
+    if diff.returncode != 0:
+        return True
+    other = subprocess.run(["git", "ls-files", "--others", "--exclude-standard", "--", *paths], capture_output=True, text=True)
+    return bool(other.stdout.strip())
 
 
 def manifest_path(slug):
@@ -613,8 +720,18 @@ def load_manifest(slug):
 def atomic_write(path, data):
     if isinstance(data, str):
         data = data.encode("utf-8")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    if os.path.lexists(path) and os.path.islink(path):
+    parent = os.path.dirname(path) or "."
+    os.makedirs(parent, exist_ok=True)
+    root = os.path.realpath(".")
+    real_parent = os.path.realpath(parent)
+    try:
+        if os.path.commonpath([root, real_parent]) != root:
+            raise ValueError("refusing to write outside the repo: %s" % path)
+    except ValueError as e:
+        if "refusing to write" in str(e):
+            raise
+        raise ValueError("refusing to write outside the repo: %s" % path)
+    if os.path.islink(parent) or os.path.lexists(path) and os.path.islink(path):
         raise ValueError("refusing symlink %s" % path)
     fd, tmp = tempfile.mkstemp(prefix=".prompt-", dir=os.path.dirname(path))
     try:
@@ -636,6 +753,7 @@ def fresh_built(slug, compiled):
         "bot_inputs": compiled["bot_inputs"],
         "built_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "git_commit": head_commit(),
+        "git_commit_dirty": inputs_dirty(compiled.get("input_paths") or []),
         "input_hash": compiled["input_hash"],
         "inputs": compiled["inputs"],
         "kit_version": kit_version(),
@@ -654,7 +772,12 @@ def compose_manifest(slug, compiled):
         and old["built"].get("input_hash") == compiled["input_hash"]
         and old["built"].get("prompt_sha256") == compiled["prompt_sha256"]
     ):
-        built = old["built"]
+        built = dict(old["built"])
+        # The prompt bytes did not change. Refresh only the dirty flag so a
+        # later commit of the same inputs is not still marked dirty.
+        if built.get("git_commit_dirty") != new_built["git_commit_dirty"]:
+            built["git_commit_dirty"] = new_built["git_commit_dirty"]
+            built["git_commit"] = new_built["git_commit"]
         deployed = old.get("deployed", None)
     else:
         built = new_built
@@ -739,7 +862,7 @@ def cmd_build(slugs):
             continue
         if compiled["over_cap"]:
             rc = 1
-            print(over_cap_report(slug, len(compiled["prompt"]), cap, compiled["sections"]), file=sys.stderr)
+            print(over_cap_report(slug, len(compiled["prompt"]), cap, compiled["sections"], compiled.get("row_sizes")), file=sys.stderr)
             continue
         manifest = compose_manifest(slug, compiled)
         try:
@@ -748,6 +871,8 @@ def cmd_build(slugs):
         except ValueError as e:
             print("FAIL %s: %s" % (slug, e), file=sys.stderr)
             return 1
+        for w in compiled.get("warns") or []:
+            print("WARN %s: %s" % (slug, w), file=sys.stderr)
         print("build-prompt: wrote %s (%d characters)" % (prompt_path(slug), len(compiled["prompt"])))
     return rc
 
@@ -781,6 +906,18 @@ def profile_description(agent_id):
     if not isinstance(desc, str):
         return None, "no-description"
     return desc, None
+
+
+def description_matches(desc, prompt_sha):
+    """Exact bytes, or the same text with one trailing newline added or removed."""
+    if not isinstance(desc, str) or not prompt_sha:
+        return False
+    cands = [desc]
+    if desc.endswith("\n"):
+        cands.append(desc[:-1])
+    else:
+        cands.append(desc + "\n")
+    return any(sha256_bytes(c) == prompt_sha for c in cands)
 
 
 def ordered_reasons(reasons):
@@ -827,7 +964,7 @@ def check_bot(fleet, bot, items, cap):
             if why:
                 entry["drift"] = None
                 entry["drift_reason"] = why
-            elif sha256_bytes(desc) != dep.get("prompt_sha256"):
+            elif not description_matches(desc, dep.get("prompt_sha256")):
                 entry["drift"] = True
                 entry["drift_reason"] = "description-differs"
             else:
@@ -843,7 +980,7 @@ def check_bot(fleet, bot, items, cap):
     return entry
 
 
-def cmd_check(as_json):
+def cmd_check(as_json, slugs=None):
     fleet = load_fleet()
     report = {"bots": [], "errors": [], "ok": True}
     if fleet is None:
@@ -860,7 +997,7 @@ def cmd_check(as_json):
         print("WARN " + w, file=sys.stderr)
     cap = prompt_cap(fleet) if not errors else CAP_DEFAULT
     if not errors:
-        for bot in selected_bots(fleet, []):
+        for bot in selected_bots(fleet, slugs or []):
             report["bots"].append(check_bot(fleet, bot, items, cap))
     report["ok"] = not errors and not any(b["stale"] or b["drift"] is True for b in report["bots"])
     summary = plain_summary(report)
@@ -935,7 +1072,13 @@ def lines_at(rev, slug, role):
         atext, stext = actions.decode("utf-8"), shared.decode("utf-8")
     except UnicodeDecodeError:
         return None, None
-    return action_lines(atext), skill_lines(relevant_skills(atext, skill_rows(stext), role))
+    try:
+        actions, _sizes = action_lines(atext)
+        table, prefs = skill_rows(stext)
+        picked, _warns = relevant_skills(atext, table, role)
+    except ValueError:
+        return None, None
+    return actions, skill_lines(picked) + prefs
 
 
 def cmd_changelog():
@@ -988,17 +1131,22 @@ def cmd_changelog():
         lines.append("File mode (no prompt change): %s." % ", ".join(files))
     if retired_slugs:
         lines.append("Retired (skipped): %s." % ", ".join(retired_slugs))
-    # Rule diffs across waiting bots, keyed by id.
+    # Rule diffs across waiting bots, keyed by id. Removed ids come from the deployed inputs.
     by_id = {}
+    why_by = {s["id"]: s.get("prompt_why") or "" for s in items}
     for result in waiting:
         dep = (load_manifest(result["bot"]["slug"]) or {}).get("deployed") or {}
         rev = dep.get("git_commit")
+        if dep.get("git_commit_dirty"):
+            rev = None
         old_by = {i.get("id"): i for i in (dep.get("inputs") or [])}
+        current_ids = set()
         for inp in result["inputs"]:
-            rec = by_id.setdefault(inp["id"], {"id": inp["id"], "path": inp["path"], "bots": [], "after": None, "before": None})
+            current_ids.add(inp["id"])
+            rec = by_id.setdefault(inp["id"], {"id": inp["id"], "path": inp["path"], "bots": [], "after": None, "before": None, "why": why_by.get(inp["id"]) or ""})
             rec["bots"].append(result["bot"]["slug"])
-            after = next((s["digest"] for s in items if s["id"] == inp["id"]), None)
-            rec["after"] = after
+            rec["after"] = next((s["digest"] for s in items if s["id"] == inp["id"]), None)
+            rec["why"] = why_by.get(inp["id"]) or rec.get("why") or ""
             prev = old_by.get(inp["id"])
             if not dep:
                 rec["before"] = None
@@ -1007,24 +1155,37 @@ def cmd_changelog():
                 rec["before"] = digest_at(rev, prev.get("path") or inp["path"])
             elif rev:
                 rec["before"] = digest_at(rev, inp["path"])
+            elif dep:
+                rec["before"] = "(built from uncommitted files; the recorded commit does not hold this text)"
+        for iid, prev in old_by.items():
+            if iid in current_ids:
+                continue
+            rec = by_id.setdefault(iid, {"id": iid, "path": prev.get("path"), "bots": [], "after": None, "before": None, "why": "Removed from this bot's prompt.", "removed": True})
+            rec["bots"].append(result["bot"]["slug"])
+            rec["removed"] = True
+            rec["why"] = "Removed from this bot's prompt."
+            if not dep:
+                rec["undeployed"] = True
+            elif rev and prev.get("path"):
+                rec["before"] = digest_at(rev, prev["path"])
+            else:
+                rec["before"] = "(built from uncommitted files; the recorded commit does not hold this text)"
     shown = False
     for iid in sorted(by_id):
         rec = by_id[iid]
-        after = rec.get("after") or ""
+        after = rec.get("after")
         before = rec.get("before")
-        if before == after and not rec.get("undeployed"):
+        if before == after and not rec.get("undeployed") and not rec.get("removed"):
             continue
         shown = True
-        why = after.split(". ")[0].strip()
-        if why and not why.endswith("."):
-            why += "."
+        why = rec.get("why") or "This rule has no prompt_why. The before and after text are the change."
         lines.append("")
         lines.append('Rule "%s" changed for %s.' % (iid, ", ".join(sorted(set(rec["bots"])))))
-        lines.append("Why: %s" % (why or "The prompt digest for this rule changed."))
+        lines.append("Why: %s" % why)
         lines.append("Before:")
         lines.append(before if before else "(not deployed yet)")
         lines.append("After:")
-        lines.append(after or "(removed)")
+        lines.append(after if after else "(removed)")
     for result in waiting:
         bot = result["bot"]
         slug = bot["slug"]
@@ -1088,7 +1249,7 @@ def mark_deployed(slug):
         print("FAIL %s: %s" % (slug, compiled.get("reason") or compiled.get("error")), file=sys.stderr)
         return 1
     if compiled["over_cap"]:
-        print(over_cap_report(slug, len(compiled["prompt"]), compiled["cap"], compiled["sections"]), file=sys.stderr)
+        print(over_cap_report(slug, len(compiled["prompt"]), compiled["cap"], compiled["sections"], compiled.get("row_sizes")), file=sys.stderr)
         return 1
     man = load_manifest(slug)
     if not man or not man.get("built"):
@@ -1100,6 +1261,15 @@ def mark_deployed(slug):
     if file_sha(prompt_path(slug)) != compiled["prompt_sha256"]:
         print("FAIL %s: prompt file does not match the built manifest; rebuild" % slug, file=sys.stderr)
         return 1
+    if man["built"].get("git_commit_dirty") or inputs_dirty(compiled.get("input_paths") or []):
+        print("FAIL %s: built from uncommitted edits; commit the inputs before --mark-deployed" % slug, file=sys.stderr)
+        return 1
+    desc, why = profile_description(bot.get("id"))
+    if desc is not None and not description_matches(desc, compiled["prompt_sha256"]):
+        print("FAIL %s: live profile description does not match this prompt" % slug, file=sys.stderr)
+        return 1
+    if why and why not in ("profiles-dir-missing", "profile-missing", "no-description"):
+        print("WARN %s: %s" % (slug, why), file=sys.stderr)
     man["deployed"] = copy.deepcopy(man["built"])
     atomic_write(manifest_path(slug), dump_manifest(man))
     print("build-prompt: marked %s deployed" % slug)
@@ -1107,16 +1277,24 @@ def mark_deployed(slug):
 
 
 def resolve_base():
-    env = os.environ.get("BOT_FLEET_PROMPT_BASE", "").strip()
-    if env:
-        if git_out("rev-parse", "--verify", "--quiet", env) is None and git_out("rev-parse", "--verify", env) is None:
-            sys.exit("prompt-versions: base %s does not exist" % env)
-        return env
-    if git_out("rev-parse", "--verify", "origin/main") and git_out("rev-parse", "--verify", "HEAD"):
+    """PR base, or the previous commit on a main push. A clean main checkout is not compared to itself."""
+    for key in ("BOT_FLEET_PROMPT_BASE", "CLASSIFY_BASE_SHA"):
+        env = os.environ.get(key, "").strip()
+        if env and not re.fullmatch(r"0+", env):
+            if git_out("rev-parse", "--verify", env) is None:
+                sys.exit("prompt-versions: base %s does not exist" % env)
+            return env
+    head = git_out("rev-parse", "--verify", "HEAD")
+    origin = git_out("rev-parse", "--verify", "origin/main")
+    if head and origin and head == origin:
+        parent = git_out("rev-parse", "--verify", "HEAD^")
+        if parent:
+            return parent
+    if origin and head:
         mb = git_out("merge-base", "origin/main", "HEAD")
         if mb:
             return mb
-    return git_out("rev-parse", "--verify", "HEAD")
+    return head
 
 
 def parse_git_text(rev, path):
@@ -1133,6 +1311,8 @@ def parse_git_text(rev, path):
 
 def bump_status(old, new):
     if new is None:
+        if old and old.get("digest"):
+            return "fail-deleted"
         return "ok"
     if old is None or not old.get("has_front_matter"):
         return "ok"
@@ -1140,6 +1320,10 @@ def bump_status(old, new):
     new_sha = new.get("digest_sha256")
     old_ver = old.get("prompt_version")
     new_ver = new.get("prompt_version")
+    if old_ver is not None and new_ver is not None and new_ver < old_ver:
+        return "fail-decrease"
+    if old.get("applies_to") != new.get("applies_to") and old_ver == new_ver:
+        return "fail-applies"
     if old_sha != new_sha and old_ver == new_ver:
         return "fail"
     if old_sha == new_sha and old_ver != new_ver and old_ver is not None and new_ver is not None:
@@ -1184,8 +1368,23 @@ def cmd_check_versions():
         status = bump_status(old, new)
         if status == "fail":
             fails.append("%s: prompt digest changed but prompt_version did not" % path)
+        elif status == "fail-decrease":
+            fails.append("%s: prompt_version decreased" % path)
+        elif status == "fail-applies":
+            fails.append("%s: applies_to changed but prompt_version did not" % path)
         elif status == "warn":
             warns.append("%s: prompt_version changed but the prompt digest did not" % path)
+    current = set(kit_paths())
+    for path in sorted(kit_paths_at(base)):
+        if path in current:
+            continue
+        old_text = parse_git_text(base, path)
+        if not isinstance(old_text, str) or old_text == "BADMODE":
+            fails.append("%s: kit prompt source removed and the base blob is not readable" % path)
+            continue
+        old = parse_source(path, old_text, "kit")
+        if old.get("digest"):
+            fails.append("%s: kit prompt source removed" % path)
     ids = []
     for path in kit_paths():
         try:
@@ -1219,9 +1418,10 @@ def main(argv):
         return 0
     if argv[0] == "--check":
         rest = [a for a in argv[1:] if a != "--json"]
-        if rest:
-            sys.exit("usage: build-prompt.sh --check [--json]")
-        return cmd_check("--json" in argv[1:])
+        for s in rest:
+            if not SLUG_RX.fullmatch(s):
+                sys.exit("usage: build-prompt.sh --check [--json] [slug...]")
+        return cmd_check("--json" in argv[1:], rest)
     if argv[0] == "--json":
         sys.exit("usage: build-prompt.sh --check --json")
     if argv[0] == "--changelog":

@@ -145,11 +145,23 @@ def schema_name_for(path):
 def fail_line(path, exc):
     return "FAIL %s: %s" % (path, str(exc).splitlines()[0])
 
-BOARD_PATH_RX = re.compile(r"^local/(?:[a-z0-9_-]+/)*[a-z0-9_-]+\.md$")
+BOARD_PATH_RX = re.compile(r"^local/shared/state/(?:[a-z0-9_-]+/)?[a-z0-9_-]+\.md$")
 RESERVED_BOARD_PATHS = {
     "local/shared/SHARED-SKILLS.md",
     "local/overrides.md",
 }
+
+def valid_board_path(path):
+    """Single allowlist. An invalid path means the board feature is off."""
+    if not isinstance(path, str) or not path:
+        return False
+    if path.startswith("/") or path.startswith("bots/") or ".." in path.split("/"):
+        return False
+    if path in RESERVED_BOARD_PATHS or path.startswith("local/prompts/") or path.startswith("local/rules/"):
+        return False
+    if not path.startswith("local/shared/state/"):
+        return False
+    return BOARD_PATH_RX.fullmatch(path) is not None
 
 def board_errors(fleet):
     """Semantic checks for the optional board. Empty when the key is omitted.
@@ -166,13 +178,8 @@ def board_errors(fleet):
     errs = []
     path = board.get("path")
     coord = board.get("coordinator")
-    if not isinstance(path, str) or path.startswith("/") or ".." in path.split("/"):
-        errs.append("board.path must be a local markdown file with no ..")
-    elif (path in RESERVED_BOARD_PATHS or path.startswith("local/prompts/")
-            or path.startswith("local/rules/")):
-        errs.append("board.path must not be a rules file, the shared skills index, or a compiled prompt")
-    elif not BOARD_PATH_RX.fullmatch(path):
-        errs.append("board.path must be a local markdown file with no ..")
+    if not valid_board_path(path):
+        errs.append("board.path must be a markdown file under local/shared/state/, not under bots/, and not a reserved file")
     if not isinstance(coord, str) or not re.fullmatch(r"[a-z0-9-]+", coord or ""):
         errs.append("board.coordinator must be a bot slug, not a role")
         return errs

@@ -15,7 +15,8 @@ git config --global user.email test@example.invalid
 git config --global commit.gpgsign false
 
 # The rule text is in the common Prompt digest, so compiled prompts can carry it.
-grep -q 'prompt_version: 2' "$SRC/fleet/rules/common.md" || fail "common prompt_version was not bumped"
+grep -q 'prompt_version: 3' "$SRC/fleet/rules/common.md" || fail "common prompt_version was not bumped"
+grep -q 'A board card is never an approval' "$SRC/fleet/rules/common.md" || fail "card-is-not-approval missing"
 grep -q 'When fleet.json sets a board' "$SRC/fleet/rules/common.md" || fail "digest missing board clause"
 grep -q 'nudges a stale card' "$SRC/fleet/rules/common.md" || fail "digest missing nudge"
 grep -q 'manager-owned cards' "$SRC/fleet/rules/common.md" || fail "digest missing approval cards"
@@ -32,6 +33,7 @@ mkdir -p "$REPO/fleet/scripts" "$REPO/fleet/schema" "$REPO/local/shared/state" \
   "$REPO/bots/rex/kb" "$REPO/bots/nell/kb"
 cp "$SRC/fleet/OWNERS.json" "$REPO/fleet/OWNERS.json"
 cp "$SRC/fleet/scripts/owners.py" "$REPO/fleet/scripts/owners.py"
+cp "$SRC/fleet/scripts/schema_check.py" "$REPO/fleet/scripts/schema_check.py"
 cp "$SRC/fleet/scripts/sync.sh" "$REPO/fleet/scripts/sync.sh"
 cp "$SRC/fleet/scripts/schema_check.py" "$REPO/fleet/scripts/schema_check.py"
 cp "$SRC/fleet/scripts/check-staged-config.sh" "$REPO/fleet/scripts/check-staged-config.sh"
@@ -96,7 +98,7 @@ assert any("retired" in e for e in errs), errs
 bad["board"]["coordinator"] = "mina"
 bad["board"]["path"] = "local/shared/SHARED-SKILLS.md"
 errs = schema_check.board_errors(bad)
-assert any("shared skills" in e for e in errs), errs
+assert any("local/shared/state" in e for e in errs), errs
 bad["board"]["path"] = "local/../../secret.md"
 if jsonschema:
     try:
@@ -180,7 +182,55 @@ git -C "$REPO" reset -q -- local/shared/state/board.md
 git -C "$REPO" checkout -q -- local/shared/state/board.md
 pass "update: other bot yes, retired no, manager yes; delete stays with manager and coordinator"
 
-# sync: path arguments also stage the journal and a board this bot may write.
+# A journal symlink to another bot's file is refused, including a type change.
+printf 'mina note\n' > "$REPO/bots/mina/kb/note.md"
+git -C "$REPO" add -- bots/mina/kb/note.md
+try_check mina worker
+[ "$RC" = 0 ] || fail "mina could not add her own note: $OUT"
+git -C "$REPO" commit -qm "mina: note" --no-verify
+printf 'otto day\n' > "$REPO/bots/otto/journal/day.md"
+git -C "$REPO" add -- bots/otto/journal/day.md
+try_check otto worker
+[ "$RC" = 0 ] || fail "regular journal add rejected: $OUT"
+git -C "$REPO" commit -qm "otto: journal" --no-verify
+rm -f "$REPO/bots/otto/journal/day.md"
+ln -s ../../mina/kb/note.md "$REPO/bots/otto/journal/day.md"
+git -C "$REPO" add -- bots/otto/journal/day.md
+try_check otto worker
+[ "$RC" != 0 ] || fail "journal type change to a symlink was allowed: $OUT"
+echo "$OUT" | grep -q 'type change' || fail "type change message: $OUT"
+git -C "$REPO" reset -q -- bots/otto/journal/day.md
+git -C "$REPO" checkout -q -- bots/otto/journal/day.md
+ln -s ../../mina/kb/note.md "$REPO/bots/otto/journal/other.md"
+git -C "$REPO" add -- bots/otto/journal/other.md
+try_check otto worker
+[ "$RC" != 0 ] || fail "new journal symlink was allowed: $OUT"
+echo "$OUT" | grep -q '100644' || fail "mode message: $OUT"
+git -C "$REPO" reset -q -- bots/otto/journal/other.md
+rm -f "$REPO/bots/otto/journal/other.md"
+pass "bot journal symlink and type change are refused"
+
+# A board path under bots/ does not make that file writable. The bad config is committed
+# only with --no-verify, the way a hook bypass would.
+python3 - <<PY
+import json
+p="$REPO/local/fleet.json"
+f=json.load(open(p))
+f["board"]={"path":"bots/mina/kb/note.md","coordinator":"mina"}
+json.dump(f, open(p,"w"), indent=2)
+open(p,"a").write("\n")
+PY
+git -C "$REPO" add -- local/fleet.json
+git -C "$REPO" commit -qm "bad board path" --no-verify
+printf '%s\n' 'otto edit' >> "$REPO/bots/mina/kb/note.md"
+git -C "$REPO" add -- bots/mina/kb/note.md
+try_check otto worker
+[ "$RC" != 0 ] || fail "board path under bots/ let another bot write it: $OUT"
+echo "$OUT" | grep -q "owned by bot 'mina'" || fail "expected self ownership, got: $OUT"
+git -C "$REPO" reset -q --hard HEAD~1
+pass "invalid board path is off and cannot widen another bot's files"
+
+# sync: path arguments also stage the journal. A path sync does not stage the board.
 git init -q --bare -b main "$T/origin.git"
 git -C "$REPO" remote add origin "$T/origin.git"
 git -C "$REPO" push -q origin HEAD:main
@@ -201,9 +251,18 @@ set +e
 OUT="$(cd "$REPO" && BOT_NAME=otto BOT_ROLE=worker fleet/scripts/sync.sh "otto: card" bots/otto/kb/note.md 2>&1)"
 RC=$?
 set -e
-[ "$RC" = 0 ] || fail "path sync should stage the board: $OUT"
-git -C "$REPO" show --name-only --format= HEAD | grep -q 'local/shared/state/board.md' || fail "board was left unstaged: $OUT"
-pass "path sync stages the board for a bot who may write it"
+[ "$RC" != 0 ] || fail "path sync should not carry a half-edited board through rebase: $OUT"
+git -C "$REPO" log -1 --format=%s | grep -q 'otto: card' && git -C "$REPO" show HEAD:local/shared/state/board.md | grep -q 'second card' && fail "path sync committed the board" || true
+git -C "$REPO" reset -q --hard origin/main
+printf '\n- otto: second card\n' >> "$REPO/local/shared/state/board.md"
+printf '\nthird note\n' >> "$REPO/bots/otto/kb/note.md"
+set +e
+OUT="$(cd "$REPO" && BOT_NAME=otto BOT_ROLE=worker fleet/scripts/sync.sh "otto: card" 2>&1)"
+RC=$?
+set -e
+[ "$RC" = 0 ] || fail "default sync should stage the board: $OUT"
+git -C "$REPO" show HEAD:local/shared/state/board.md | grep -q 'second card' || fail "default sync left the board out: $OUT"
+pass "path sync leaves a half-edited board; a default sync stages it"
 
 printf '\n- rex: no\n' >> "$REPO/local/shared/state/board.md"
 printf '\nrex note\n' >> "$REPO/bots/rex/kb/note.md"

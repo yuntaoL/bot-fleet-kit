@@ -538,14 +538,16 @@ printf '%s\n' "$CAP" | grep -q "160000" || fail "hook did not name mode 160000:
 $CAP"
 pass "gitlink mode is refused; nothing is committed or pushed"
 
-# Regular executable files stay allowed.
+# A bot file must be mode 100644. 100755 is a regular file but not the allowed mode.
 clean
 git -C "$REPO" update-index --chmod=+x -- bots/atlas/routines/loop.json
 hook_commit worker atlas "executable routine"
-[ "$CAP_RC" = 0 ] || fail "mode 100755 was refused:
+[ "$CAP_RC" != 0 ] || fail "mode 100755 was committed:
 $CAP"
-git -C "$REPO" ls-tree HEAD -- bots/atlas/routines/loop.json | grep -q '^100755' || fail "commit did not keep mode 100755"
-pass "mode 100755 still commits"
+printf '%s\n' "$CAP" | grep -q "100755" || fail "hook did not name mode 100755:
+$CAP"
+assert_refs_same "mode 100755 is refused on a bot path"
+pass "mode 100755 is refused on a bot path"
 
 # Unstaged schema loosened to true. The index schema stays strict.
 clean; snap
