@@ -12,8 +12,9 @@
 # used to leave the journal unstaged, and rebase then refused. A path sync does not stage the
 # board: a half-edited board must not ride along. A default sync (no paths) stages the board
 # when this bot may write that change.
-# A foreign path already staged is unstaged. A bot path whose mode is not 100644
-# stays staged and the commit is refused. owners.py check runs here even when the hook is off.
+# A foreign path already staged is unstaged, and sync names it. A bot path whose mode
+# is not 100644 or 100755, and any type change, stays staged and the commit is refused.
+# The board allows 100644 only. owners.py check runs here even when the hook is off.
 # Untracked files inside the staged paths are staged. A tracked edit outside them stays unstaged;
 # git rebase then refuses to start, so that run does not push.
 # 0.10.8: before commit, staged bots/<slug>/routines/*.json, bots/<slug>/bot.json and local/fleet.json are
@@ -84,6 +85,7 @@ while IFS=$'\t' read -r st path; do
         printf 'check-boundary: %s: staged mode %s is not a regular file (100644); symlink and gitlink are refused\n' "$path" "$mode" >&2
         mode_bad=1
       else
+        echo "sync: unstaged $path" >&2
         git reset -q -- "$path" 2>/dev/null || true
       fi
     fi

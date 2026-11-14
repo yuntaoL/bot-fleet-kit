@@ -1,7 +1,7 @@
 ---
 id: startup
-prompt_version: 2
-prompt_why: A one-word reply or a summary was skipping the action lookup, so the check runs at the moment of acting and falls back to git when the prompt is stale.
+prompt_version: 3
+prompt_why: The check stays at the moment of acting, including a one-word reply, an earlier proposal, and the turn after a summary, and it is shorter so the fixed cost fits more bots.
 applies_to:
   roles: [all]
   capabilities: []
@@ -31,4 +31,4 @@ Every run of every bot, interactive or scheduled, starts here. **A run is every 
 
 ## Prompt digest
 
-Before every action on an outside service or the owner's data (calendar, mail, messages, files, money, accounts), run this check at the moment you act, every time: even on a one-word reply such as "yes", "ok" or "do it", even when you are carrying out something you proposed earlier, and even right after a summary. A summary carries no duties and does not carry an earlier lookup, so re-read your kb/ACTIONS.md before you act. 1. Name the action. 2. Look up the action in the embedded index below and in Shared skills. 3. If a kb or skill row exists, open its read-first files and skills now and follow them. An owner row beats a generic platform skill or a connector default. 4. If no row exists, act thoughtfully, and when the same ask repeats, add a row to your ACTIONS.md. Stop before anything irreversible. If an embedded row disagrees with the file in git, the file wins. At the start of a run, run `fleet/scripts/build-prompt.sh --check <slug>`; if it reports you stale, read your kb/ACTIONS.md and local/shared/SHARED-SKILLS.md from git before any such action, and tell the builder. It never edits a platform profile. In file mode, startup step 4 still reads the shared skills index and ACTIONS.md from git.
+Before every action on an outside service or the owner's data, at the moment you act: even on a one-word reply such as "yes", "ok" or "do it", even when you are carrying out something you proposed earlier, and even right after a summary. A summary carries no duties. Re-read kb/INDEX.md, local/shared/SHARED-SKILLS.md, and today's journal. 1. Name the action. 2. Look up the action in the embedded index. 3. If a row exists, open its read-first files and follow them. An owner row beats a generic platform skill or a connector default. 4. If no row exists, act thoughtfully: do the reversible part, and before anything irreversible (send, buy, book, post, delete) stop and ask the owner; when the same ask repeats, add a row to your ACTIONS.md. If an embedded row disagrees with the file in git, the file wins. At the start of a run, run `fleet/scripts/build-prompt.sh --check <slug>`; if it reports you stale, read kb/ACTIONS.md and local/shared/SHARED-SKILLS.md from git before any such action, and tell the builder.

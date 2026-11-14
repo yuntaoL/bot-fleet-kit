@@ -74,14 +74,19 @@ def index_mode(path):
     if len(lines) != 1:
         return None
     return lines[0].split(" ", 1)[0]
-def mode_problem(path, status):
-    """Add and modify must be a regular file, mode 100644. Symlink and gitlink are refused."""
+def mode_problem(path, status, allowed=("100644",)):
+    """Add and modify must be a regular file. A type change is refused.
+
+    Bot paths allow 100644 and 100755. The board allows 100644 only.
+    120000, 160000, and any other mode are refused.
+    """
     if status not in ("A", "M", "T"):
         return None
     mode = index_mode(path)
-    if status == "T" or mode != "100644":
+    if status == "T" or mode not in allowed:
         kind = "type change; " if status == "T" else ""
-        return "%sstaged mode %s is not a regular file (100644); symlink and gitlink are refused" % (kind, mode or "missing")
+        return "%sstaged mode %s is not a regular file (%s); symlink and gitlink are refused" % (
+            kind, mode or "missing", " or ".join(allowed))
     return None
 def retired_bot(rec):
     if not rec: return False
@@ -145,13 +150,13 @@ def check():
             if not allowed:
                 bad.append((path, f"owned by bot '{slug}' (others may only create new files: {rule.get('create', [])})"))
                 continue
-            problem = mode_problem(path, st)
+            problem = mode_problem(path, st, ("100644", "100755"))
             if problem:
                 bad.append((path, problem))
             continue
         board_ok = board_write_allowed(me, role, path, st)
         if board_ok is True:
-            problem = mode_problem(path, st)
+            problem = mode_problem(path, st, ("100644",))
             if problem:
                 bad.append((path, problem))
             continue

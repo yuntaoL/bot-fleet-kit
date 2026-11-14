@@ -32,12 +32,15 @@ FOOTER_BODY = (
 # These phrases are the fixed routine; a digest that drops one is refused.
 ROUTINE_ANCHORS = (
     "one-word reply",
+    "carrying out something you proposed earlier",
     "right after a summary",
-    "embedded index",
+    "kb/INDEX.md",
+    "today's journal",
+    "Look up the action in the embedded index.",
     "An owner row beats a generic platform skill or a connector default.",
-    "act thoughtfully",
-    "add a row to your ACTIONS.md",
+    "4. If no row exists, act thoughtfully: do the reversible part, and before anything irreversible (send, buy, book, post, delete) stop and ask the owner; when the same ask repeats, add a row to your ACTIONS.md.",
     "the file wins",
+    "build-prompt.sh --check <slug>",
 )
 ROLES = ("manager", "builder", "worker", "retired", "all")
 SLUG_RX = re.compile(r"^[a-z0-9-]+$")
@@ -90,22 +93,32 @@ def norm_newlines(s):
 
 
 def pad_strip(cell):
-    """Drop only the ASCII spaces that pad a markdown cell. Leave NBSP and inner spaces."""
-    start, end = 0, len(cell)
-    while start < end and cell[start] == " ":
-        start += 1
-    while end > start and cell[end - 1] == " ":
-        end -= 1
-    return cell[start:end]
+    """Drop one leading and one trailing ASCII pad space. Further spaces, and NBSP, stay."""
+    if cell.startswith(" "):
+        cell = cell[1:]
+    if cell.endswith(" "):
+        cell = cell[:-1]
+    return cell
 
 
 def split_cells(line):
-    """Split one markdown table row. Escaped \\| and pipes inside backticks stay in the cell."""
+    """Split one markdown table row. Escaped \\| and pipes inside backticks stay in the cell.
+
+    A row that ends in \\| has no closing pipe. That is a build failure, not a cell that ends in \\.
+    """
     s = line.strip("\n")
     if s.startswith("|"):
         s = s[1:]
-    if s.endswith("|"):
-        s = s[:-1]
+    if not s.endswith("|"):
+        raise ValueError("table row has no closing pipe: %s" % line.strip())
+    slashes = 0
+    i = len(s) - 2
+    while i >= 0 and s[i] == "\\":
+        slashes += 1
+        i -= 1
+    if slashes % 2 == 1:
+        raise ValueError("table row has no closing pipe: %s" % line.strip())
+    s = s[:-1]
     cells, buf, code = [], [], False
     i = 0
     while i < len(s):
@@ -387,6 +400,15 @@ def col_index(header, needle):
     return None
 
 
+def col_exact(header, name):
+    """Match a header cell exactly. 'skill' must not match a cell that only contains that word."""
+    want = name.strip().lower()
+    for i, h in enumerate(header):
+        if h.strip().lower() == want:
+            return i
+    return None
+
+
 def is_fill_in(cell):
     t = cell.strip(" ").lower()
     return t == "fill in" or t.startswith("fill in:")
@@ -419,15 +441,21 @@ def action_lines(text):
     return lines, widths
 
 
-def skill_rows(text):
-    """Skill rows, plus owner-preference rows from tables that have no Skill column.
+SKILL_ID = re.compile(r"[a-z0-9][a-z0-9-]*")
+# Characters that continue a token. '.' , ',' ';' ':' ')' ']' end one, so 'tide-table.' matches.
+_TOKEN_CONT = r"A-Za-z0-9_/-"
 
-    A preference table ranks an owner row over a platform default. Every such row
-    is included for every bot. A table that is neither is an error.
+
+def skill_rows(text):
+    """Skill rows, plus owner-preference rows.
+
+    The Skill column is an exact header, not a cell that merely contains the word.
+    A preference row is kept as cells and filtered per bot later. A table that is
+    neither is an error.
     """
     rows_out, prefs = [], []
     for header, rows in parse_tables(text, "SHARED-SKILLS.md"):
-        sc = col_index(header, "skill")
+        sc = col_exact(header, "skill")
         ac = col_index(header, "action")
         lc = col_index(header, "location")
         pc = col_index(header, "applies")
@@ -435,48 +463,94 @@ def skill_rows(text):
         rc = col_index(header, "read")
         if sc is not None:
             for cells in rows:
-                name = cell_at(cells, sc).strip(" `").lower()
-                if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", name):
+                raw = cell_at(cells, sc).strip()
+                if not raw or is_fill_in(raw):
                     continue
+                name = raw.strip("`").lower()
+                if not SKILL_ID.fullmatch(name):
+                    raise ValueError("SHARED-SKILLS.md: %r is not a skill id" % raw)
                 applies = [p.strip(" `").lower() for p in cell_at(cells, pc).split(",") if p.strip(" `")]
                 rows_out.append({
                     "name": name,
                     "actions": cell_at(cells, ac),
-                    "location": cell_at(cells, lc).strip(" `"),
+                    "location": cell_at(cells, lc),
+                    "read": cell_at(cells, rc) if rc is not None else "",
                     "hard": cell_at(cells, hc) if hc is not None else None,
                     "applies": applies,
                 })
             continue
         if ac is not None and (rc is not None or hc is not None or col_index(header, "override") is not None or col_index(header, "pointer") is not None):
+            apc = col_exact(header, "applies to")
             for cells in rows:
-                prefs.append("- " + " | ".join(cells))
+                applies = []
+                if apc is not None:
+                    applies = [p.strip(" `").lower() for p in cell_at(cells, apc).split(",") if p.strip(" `")]
+                prefs.append({
+                    "cells": cells,
+                    "action": cell_at(cells, ac),
+                    "applies": applies,
+                })
             continue
         raise ValueError("SHARED-SKILLS.md: table %s is not consumed" % header)
     return rows_out, prefs
 
 
 def _token(text, token):
-    """True when token is its own word or path, not a substring of a longer token."""
+    """True when token is its own word or path. Trailing . , ; : ) ] does not hide it."""
     if not token:
         return False
     return re.search(
-        r"(?<![A-Za-z0-9_./-])%s(?![A-Za-z0-9_./-])" % re.escape(token),
+        r"(?<![%s])%s(?![%s])" % (_TOKEN_CONT, re.escape(token), _TOKEN_CONT),
         text,
     ) is not None
 
 
+def skills_segment(text, name):
+    """True when skills/<name> is a path segment, including skills/<name>/SKILL.md."""
+    if not name:
+        return False
+    return re.search(
+        r"(?<![A-Za-z0-9_-])skills/%s(?![A-Za-z0-9_-])" % re.escape(name),
+        text,
+    ) is not None
+
+
+def location_candidates(location):
+    """Each backticked span is its own candidate. A bare word such as library is not.
+
+    A backticked path also tries the SKILL.md file under that directory.
+    """
+    loc = location or ""
+    cands = []
+    for raw in re.findall(r"`([^`]+)`", loc):
+        c = raw.strip()
+        if not c or c in cands:
+            continue
+        cands.append(c)
+        if "/" in c and not c.rstrip("/").endswith("SKILL.md"):
+            extra = c.rstrip("/") + "/SKILL.md"
+            if extra not in cands:
+                cands.append(extra)
+    if not cands:
+        bare = loc.strip()
+        if "/" in bare:
+            cands.append(bare)
+            if not bare.rstrip("/").endswith("SKILL.md"):
+                cands.append(bare.rstrip("/") + "/SKILL.md")
+    return cands
+
+
 def referenced(actions_text, name, location):
-    """A reference is an exact skill name or an exact path, on a token boundary.
+    """A reference is an exact skill name, skills/<name>, or an exact path.
 
     A location that is only a word, such as library, is not a path and does not match.
     """
-    if name and _token(actions_text, name):
+    if name and (_token(actions_text, name) or skills_segment(actions_text, name)):
         return True
-    loc = (location or "").strip().strip("`").strip()
-    if not loc or "/" not in loc:
-        return False
-    skill_file = loc.rstrip("/") + "/SKILL.md"
-    return _token(actions_text, loc) or _token(actions_text, skill_file)
+    for cand in location_candidates(location):
+        if _token(actions_text, cand):
+            return True
+    return False
 
 
 def relevant_skills(actions_text, rows, role):
@@ -496,14 +570,93 @@ def relevant_skills(actions_text, rows, role):
     return out, warns
 
 
+def read_targets(cell):
+    """Backticked spans and markdown link targets from a Read-first cell, in order."""
+    out = []
+    for raw in re.findall(r"`([^`]+)`", cell or "") + re.findall(r"\[[^\]]*\]\(([^)]+)\)", cell or ""):
+        t = raw.strip()
+        if t and t not in out:
+            out.append(t)
+    return out
+
+
+def rewrite_rel_links(text, source="local/shared/SHARED-SKILLS.md"):
+    """Turn a ../ link in a preference row into a repo-relative path."""
+    base = os.path.dirname(source)
+
+    def one(target):
+        path, frag = target, ""
+        if "#" in path:
+            path, frag = path.split("#", 1)
+            frag = "#" + frag
+        if ".." not in path.split("/"):
+            return target
+        norm = os.path.normpath(os.path.join(base, path)).replace("\\", "/")
+        if norm.startswith("../") or norm == ".." or os.path.isabs(norm):
+            raise ValueError("preference link leaves the repo: %s" % target)
+        return norm + frag
+
+    def link_repl(m):
+        return m.group(1) + "(" + one(m.group(2)) + ")"
+
+    text = re.sub(r"(\[[^\]]*\])\(([^)]+)\)", link_repl, text)
+
+    def tick_repl(m):
+        inner = m.group(1)
+        if ".." not in inner.split("/"):
+            return m.group(0)
+        return "`" + one(inner) + "`"
+
+    return re.sub(r"`([^`]+)`", tick_repl, text)
+
+
 def skill_lines(rows):
     lines = []
     for r in rows:
-        line = "- %s | %s | %s" % (r["name"], r["actions"], r["location"])
+        bits = [r["name"], r["actions"], r["location"]]
+        reads = read_targets(r.get("read") or "")
+        if reads:
+            bits.append(" ".join(reads))
         if r.get("hard") is not None:
-            line += " | " + r["hard"]
-        lines.append(line)
+            bits.append(r["hard"])
+        lines.append("- " + " | ".join(bits))
     return lines
+
+
+def relevant_prefs(prefs, actions_text, slug, role, skill_rows_picked):
+    """An Applies to cell lists slugs, roles, or all. An empty cell is relevance-only.
+
+    Relevance is the action, or a skill named in the row, matching this bot's ACTIONS
+    or a skill row already chosen for this bot.
+    """
+    skill_blob = "\n".join(
+        " ".join([r["name"], r.get("location") or "", r.get("read") or ""]) for r in skill_rows_picked
+    )
+    out = []
+    for pref in prefs:
+        applies = pref["applies"]
+        if applies:
+            if "all" in applies or role in applies or slug in applies:
+                out.append(pref)
+            continue
+        action = (pref["action"] or "").strip().strip("`")
+        if action and _token(actions_text, action):
+            out.append(pref)
+            continue
+        blob = " | ".join(pref["cells"])
+        names = re.findall(r"`([a-z0-9][a-z0-9-]*)`", blob)
+        names += re.findall(r"skills/([a-z0-9][a-z0-9-]*)", blob)
+        if any(
+            _token(actions_text, n) or skills_segment(actions_text, n) or _token(skill_blob, n)
+            for n in names
+        ):
+            out.append(pref)
+    return out
+
+
+def pref_line(pref):
+    cells = [rewrite_rel_links(c) for c in pref["cells"]]
+    return "- " + " | ".join(cells)
 
 
 def render_thin(worktree):
@@ -568,13 +721,26 @@ def input_record(src):
 
 def over_cap_report(slug, total, cap, sections, row_sizes=None):
     ranked = sorted(((n, len(t)) for n, t in sections), key=lambda x: (-x[1], x[0]))
+    action_n = sum(len(t) for n, t in sections if n == "action-index")
+    fixed_n = total - action_n
     lines = ["FAIL %s: compiled prompt is %d characters (cap %d)." % (slug, total, cap), "Largest sections:"]
     for name, n in ranked:
         lines.append("  %s %d" % (name, n))
+    lines.append("Fixed cost %d (thin, routine, rule gists, shared skills, footer)." % fixed_n)
+    lines.append("Action index %d." % action_n)
     lines.append("Largest rows:")
     for name, n in sorted(row_sizes or [], key=lambda x: (-x[1], x[0]))[:12]:
         lines.append("  %s %d" % (name, n))
-    lines.append("The fix is for this bot to shorten its own ACTIONS.md rows. Hard rules are copied verbatim and are never truncated.")
+    if fixed_n > action_n:
+        lines.append(
+            "The overflow is shared and fixed cost (%d), larger than this bot's action index (%d). Do not trim this bot's ACTIONS.md for a shared cost."
+            % (fixed_n, action_n)
+        )
+    else:
+        lines.append(
+            "The overflow is this bot's own action index (%d), larger than the fixed cost (%d). The fix is for this bot to shorten its own ACTIONS.md rows. Hard rules are copied verbatim and are never truncated."
+            % (action_n, fixed_n)
+        )
     return "\n".join(lines)
 
 
@@ -634,11 +800,12 @@ def compile_bot(fleet, bot, items, cap):
     gists = [(s["id"], s["digest"]) for s in chosen if s["id"] != "startup"]
     try:
         actions, row_sizes = action_lines(actions_text)
-        skill_table, pref_lines = skill_rows(shared_text)
+        skill_table, pref_rows = skill_rows(shared_text)
         picked, skill_warns = relevant_skills(actions_text, skill_table, role)
+        kept_prefs = relevant_prefs(pref_rows, actions_text, slug, role, picked)
     except ValueError as e:
         return {"ok": False, "reason": "bad-source", "error": str(e)}
-    skills = skill_lines(picked) + pref_lines
+    skills = skill_lines(picked) + [pref_line(p) for p in kept_prefs]
     prompt, sections = assemble(thin, startup["digest"], gists, actions, skills)
     payload = {
         "actions": actions,
@@ -717,20 +884,35 @@ def load_manifest(slug):
         return None
 
 
+def inside_repo(path):
+    """Refuse a path that leaves the repo. Call this before creating directories."""
+    root = os.path.realpath(".")
+    rel = os.path.normpath(path)
+    if os.path.isabs(path) or rel.startswith(".."):
+        raise ValueError("refusing to write outside the repo: %s" % path)
+    cur = "."
+    for part in rel.split("/"):
+        if part in ("", "."):
+            continue
+        nxt = os.path.join(cur, part)
+        if os.path.islink(nxt):
+            real = os.path.realpath(nxt)
+            try:
+                if os.path.commonpath([root, real]) != root:
+                    raise ValueError("refusing to write outside the repo: %s" % path)
+            except ValueError as e:
+                if "refusing to write" in str(e):
+                    raise
+                raise ValueError("refusing to write outside the repo: %s" % path)
+        cur = nxt
+
+
 def atomic_write(path, data):
     if isinstance(data, str):
         data = data.encode("utf-8")
+    inside_repo(path)
     parent = os.path.dirname(path) or "."
     os.makedirs(parent, exist_ok=True)
-    root = os.path.realpath(".")
-    real_parent = os.path.realpath(parent)
-    try:
-        if os.path.commonpath([root, real_parent]) != root:
-            raise ValueError("refusing to write outside the repo: %s" % path)
-    except ValueError as e:
-        if "refusing to write" in str(e):
-            raise
-        raise ValueError("refusing to write outside the repo: %s" % path)
     if os.path.islink(parent) or os.path.lexists(path) and os.path.islink(path):
         raise ValueError("refusing symlink %s" % path)
     fd, tmp = tempfile.mkstemp(prefix=".prompt-", dir=os.path.dirname(path))
@@ -1076,9 +1258,10 @@ def lines_at(rev, slug, role):
         actions, _sizes = action_lines(atext)
         table, prefs = skill_rows(stext)
         picked, _warns = relevant_skills(atext, table, role)
+        kept = relevant_prefs(prefs, atext, slug, role, picked)
     except ValueError:
         return None, None
-    return actions, skill_lines(picked) + prefs
+    return actions, skill_lines(picked) + [pref_line(p) for p in kept]
 
 
 def cmd_changelog():
@@ -1277,16 +1460,23 @@ def mark_deployed(slug):
 
 
 def resolve_base():
-    """PR base, or the previous commit on a main push. A clean main checkout is not compared to itself."""
+    """PR base, or the previous commit on a main push. A clean main checkout is not compared to itself.
+
+    An unreachable base (a force-push that dropped the SHA) falls back to the merge-base.
+    If that is also missing, there is no base and the check is skipped.
+    """
+    unreachable = False
     for key in ("BOT_FLEET_PROMPT_BASE", "CLASSIFY_BASE_SHA"):
         env = os.environ.get(key, "").strip()
         if env and not re.fullmatch(r"0+", env):
-            if git_out("rev-parse", "--verify", env) is None:
-                sys.exit("prompt-versions: base %s does not exist" % env)
-            return env
+            if subprocess.run(["git", "cat-file", "-e", "%s^{commit}" % env], capture_output=True).returncode == 0:
+                return env
+            print("WARN prompt-versions: base %s is unreachable; falling back to merge-base" % env, file=sys.stderr)
+            unreachable = True
+            break
     head = git_out("rev-parse", "--verify", "HEAD")
     origin = git_out("rev-parse", "--verify", "origin/main")
-    if head and origin and head == origin:
+    if not unreachable and head and origin and head == origin:
         parent = git_out("rev-parse", "--verify", "HEAD^")
         if parent:
             return parent
@@ -1294,7 +1484,22 @@ def resolve_base():
         mb = git_out("merge-base", "origin/main", "HEAD")
         if mb:
             return mb
+    if unreachable:
+        return None
     return head
+
+
+def intentional_removals():
+    """Paths listed in fleet/PROMPT-REMOVALS may be deleted on purpose."""
+    path = "fleet/PROMPT-REMOVALS"
+    if not os.path.isfile(path) or os.path.islink(path):
+        return set()
+    out = set()
+    for line in read_repo_text(path).splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            out.add(line)
+    return out
 
 
 def parse_git_text(rev, path):
@@ -1383,8 +1588,10 @@ def cmd_check_versions():
             fails.append("%s: kit prompt source removed and the base blob is not readable" % path)
             continue
         old = parse_source(path, old_text, "kit")
-        if old.get("digest"):
+        if old.get("digest") and path not in intentional_removals():
             fails.append("%s: kit prompt source removed" % path)
+        elif old.get("digest"):
+            warns.append("%s: kit prompt source removed, listed in fleet/PROMPT-REMOVALS" % path)
     ids = []
     for path in kit_paths():
         try:

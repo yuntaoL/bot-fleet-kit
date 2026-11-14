@@ -486,6 +486,7 @@ echo worker-note >> "$REPO/bots/atlas/memory.md"
 echo extra-atlas > "$REPO/bots/atlas/note.txt"
 echo edited >> "$REPO/local/overrides.md"
 echo '# not me' > "$REPO/README.md"
+git -C "$REPO" add -- README.md
 sync_run worker atlas "worker paths"
 # local/overrides.md and README stay dirty, so rebase does not push. The commit is still only bots/atlas.
 [ "$(head_sha)" != "$BEFORE" ] || fail "worker sync did not commit"
@@ -497,6 +498,8 @@ $got
 want:
 $want"
 git -C "$REPO" diff --name-only | grep -q "local/overrides.md" || fail "overrides should remain unstaged"
+printf '%s\n' "$CAP" | grep -q "sync: unstaged README.md" || fail "sync did not name the foreign path:
+$CAP"
 git -C "$REPO" diff --name-only | grep -q "README.md" || fail "README should remain unstaged"
 pass "worker sync stages bots/<fleet.bot>/ only, including untracked files there; local/ and README stay unstaged"
 
@@ -538,16 +541,33 @@ printf '%s\n' "$CAP" | grep -q "160000" || fail "hook did not name mode 160000:
 $CAP"
 pass "gitlink mode is refused; nothing is committed or pushed"
 
-# A bot file must be mode 100644. 100755 is a regular file but not the allowed mode.
-clean
+# Bot paths allow 100644 and 100755. A type change stays refused. Edit the executable, then restore 100644.
+clean; snap
 git -C "$REPO" update-index --chmod=+x -- bots/atlas/routines/loop.json
 hook_commit worker atlas "executable routine"
-[ "$CAP_RC" != 0 ] || fail "mode 100755 was committed:
+[ "$CAP_RC" = 0 ] || fail "mode 100755 was refused:
 $CAP"
-printf '%s\n' "$CAP" | grep -q "100755" || fail "hook did not name mode 100755:
+git -C "$REPO" ls-files --stage -- bots/atlas/routines/loop.json | grep -q '^100755' || fail "100755 was not recorded"
+python3 - "$REPO/bots/atlas/routines/loop.json" << 'PY'
+import json, sys
+p = sys.argv[1]
+j = json.load(open(p))
+j["name"] = "loop-edited"
+json.dump(j, open(p, "w"), indent=2)
+open(p, "a").write("\n")
+PY
+git -C "$REPO" add -- bots/atlas/routines/loop.json
+git -C "$REPO" update-index --chmod=+x -- bots/atlas/routines/loop.json
+hook_commit worker atlas "edit executable routine"
+[ "$CAP_RC" = 0 ] || fail "edit of a 100755 bot file was refused:
 $CAP"
-assert_refs_same "mode 100755 is refused on a bot path"
-pass "mode 100755 is refused on a bot path"
+git -C "$REPO" ls-files --stage -- bots/atlas/routines/loop.json | grep -q '^100755' || fail "edit dropped 100755"
+git -C "$REPO" update-index --chmod=-x -- bots/atlas/routines/loop.json
+hook_commit worker atlas "restore routine mode"
+[ "$CAP_RC" = 0 ] || fail "restore to 100644 was refused:
+$CAP"
+git -C "$REPO" ls-files --stage -- bots/atlas/routines/loop.json | grep -q '^100644' || fail "mode was not restored to 100644"
+pass "mode 100755 on a bot path is committed, edited, and restored to 100644"
 
 # Unstaged schema loosened to true. The index schema stays strict.
 clean; snap

@@ -174,6 +174,12 @@ git -C "$REPO" add -- local/shared/state/board.md
 try_check nell manager
 [ "$RC" = 0 ] || fail "manager update rejected: $OUT"
 git -C "$REPO" commit -qm "nell: approval card" --no-verify
+# The board stays 100644. A bot folder may be 100755; the board may not.
+git -C "$REPO" update-index --chmod=+x -- local/shared/state/board.md
+try_check otto worker
+[ "$RC" != 0 ] || fail "board mode 100755 was allowed: $OUT"
+echo "$OUT" | grep -q '100755' || fail "board 100755 message: $OUT"
+git -C "$REPO" update-index --chmod=-x -- local/shared/state/board.md
 # Delete is not for the other bot.
 git -C "$REPO" rm -q local/shared/state/board.md
 try_check otto worker

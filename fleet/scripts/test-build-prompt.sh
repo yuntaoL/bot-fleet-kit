@@ -29,6 +29,8 @@ for f in fleet/rules/startup.md fleet/rules/routines.md fleet/rules/common.md fl
 done
 grep -q 'one-word reply' "$SRC/fleet/rules/startup.md" || fail "startup digest missing routine"
 grep -q 'An owner row beats a generic platform skill or a connector default.' "$SRC/fleet/rules/startup.md" || fail "startup digest missing owner-row sentence"
+grep -F -q '4. If no row exists, act thoughtfully: do the reversible part, and before anything irreversible (send, buy, book, post, delete) stop and ask the owner; when the same ask repeats, add a row to your ACTIONS.md.' "$SRC/fleet/rules/startup.md" || fail "startup digest missing step 4"
+grep -q 'kb/INDEX.md' "$SRC/fleet/rules/startup.md" || fail "startup digest missing re-read list"
 python3 -c 'import json; r=json.load(open("'"$SRC"'/fleet/OWNERS.json"))["rules"]; i=next(k for k,x in enumerate(r) if x["path"]=="local/prompts/**"); j=next(k for k,x in enumerate(r) if x["path"]=="local/**"); assert i<j and r[i]["owner"]=="builder"' || fail "prompts rule is not before local/**"
 grep -q '| Applies to |' "$SRC/templates/local/shared/SHARED-SKILLS.md" || fail "shared index missing Applies to"
 grep -q 'agent-data' "$SRC/fleet/migrations/0.12.0.sh" && fail "migration names a profile dir" || true
@@ -57,6 +59,41 @@ cp "$SRC/templates/THIN-PROMPT.tmpl" "$REPO/templates/THIN-PROMPT.tmpl"
 printf '# example fleet\n' > "$REPO/README.md"
 printf '# not a prompt input\n' > "$REPO/fleet/docs/NOTE.md"
 chmod +x "$REPO/fleet/scripts/build-prompt.sh" "$REPO/fleet/scripts/sync.sh" "$REPO/fleet/migrations/0.12.0.sh"
+
+python3 - "$REPO" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1] + "/fleet/scripts")
+import prompt_build as pb
+cell = pb.pad_strip(" Keep the end   ")
+assert cell == "Keep the end  ", repr(cell)
+try:
+    pb.split_cells("| Keep the end \\|")
+    raise SystemExit("escaped pipe compiled")
+except ValueError as e:
+    assert "closing pipe" in str(e), e
+text = """| Generic skill it overrides | Action | Read first |
+|---|---|---|
+| platform calendar | calendar events | `kb/prefs/calendar.md` |
+"""
+rows, prefs = pb.skill_rows(text)
+assert rows == [], rows
+assert prefs and prefs[0]["cells"][0] == "platform calendar", prefs
+bad = """| Skill | Location |
+|---|---|
+| Not A Skill | `fleet/skills/nope` |
+"""
+try:
+    pb.skill_rows(bad)
+    raise SystemExit("bad skill id was kept")
+except ValueError as e:
+    assert "skill id" in str(e), e
+shared = pb.over_cap_report("x", 9000, 8000, [("action-index", "a" * 1000), ("shared-skills", "s" * 8000)], [])
+assert "Do not trim" in shared, shared
+assert "shorten its own ACTIONS.md rows" not in shared, shared
+own = pb.over_cap_report("y", 16000, 8000, [("action-index", "a" * 12000), ("pre-action", "p" * 4000)], [])
+assert "shorten its own ACTIONS.md rows" in own, own
+print("unit ok")
+PY
 
 python3 - "$REPO" <<'PY'
 import json, os, sys
@@ -88,18 +125,24 @@ status: seeded
 ---
 # Shared skills
 
-| Skill | When to use | Action types covered | Owner | Location | Applies to |
-|---|---|---|---|---|---|
-| fleet-change | Use when a change touches the fleet repo and must be classified before anyone applies it. This sentence must not be copied into the prompt. | repo and fleet changes | builder | `fleet/skills/fleet-change` | all |
-| rename-bot | Use when renaming a bot display name, slug, worktree or branch. | repo and fleet changes | builder | `fleet/skills/rename-bot` | builder |
-| ledger | Use when filing pier notes into the ledger skill, including the long explanation that must not be copied into the prompt. | pier notes | builder | `local/shared/skills/ledger` | manager |
-| tide-table | Use when reading tide times for the pier. | tide times | worker | `local/shared/skills/tide-table` | worker |
-| ledger | Second row of the same skill. | pier notes | builder | `local/shared/skills/ledger` | manager |
-| shelf-index | Use only when the skill name or its path is named. | shelf | builder | library |  |
+| Skill | When to use | Action types covered | Owner | Location | Applies to | Read first |
+|---|---|---|---|---|---|---|
+| fleet-change | Use when a change touches the fleet repo and must be classified before anyone applies it. This sentence must not be copied into the prompt. | repo and fleet changes | builder | `fleet/skills/fleet-change` | all | |
+| rename-bot | Use when renaming a bot display name, slug, worktree or branch. | repo and fleet changes | builder | `fleet/skills/rename-bot` | builder | |
+| ledger | Use when filing pier notes into the ledger skill, including the long explanation that must not be copied into the prompt. | pier notes | builder | `local/shared/skills/ledger` | manager | `kb/prefs/ledger.md` and [notes](kb/prefs/notes.md) |
+| tide-table | Use when reading tide times for the pier. | tide times | worker | `local/shared/skills/tide-table` | worker | |
+| ledger | Second row of the same skill. | pier notes | builder | `local/shared/skills/ledger` | manager | |
+| shelf-index | Use only when the skill name or its path is named. | shelf | builder | library |  | |
+| pier-bell | Use only when the name is named. | bell | worker | library |  | |
+| dock-line | Use only when a path is named. | dock | worker | `fleet/skills/dock-line` or `local/shared/skills/dock-line` |  | |
+| call-log | Use only when the phrase is named. | calls | worker | the `call log` file |  | |
+| wharf-bell | Use only when the skills path is named. | wharf | worker | library |  | |
 
-| Action | Generic default it overrides | Read first | Pointer |
-|---|---|---|---|
-| calendar events | a connector calendar | kb/prefs/calendar.md | owner calendar wins |
+| Action | Generic default it overrides | Read first | Pointer | Applies to |
+|---|---|---|---|---|
+| calendar events | a connector calendar | kb/prefs/calendar.md and [bell](../../local/shared/skills/tide-table/SKILL.md) | owner calendar wins | |
+| dock painting | a generic edit | `fleet/docs/CONTRIBUTING.md` | builder wins | builder |
+| crate paint | a generic color | notes | nowhere | |
 """
 open("local/shared/SHARED-SKILLS.md", "w").write(shared)
 open("local/rules/pier-ledger.md", "w").write("""---
@@ -137,7 +180,7 @@ status: seeded
 ---
 # Actions index
 
-Read the [shared skills index](../../../local/shared/SHARED-SKILLS.md) first. The library is mentioned here and is not a skill reference.
+Read the [shared skills index](../../../local/shared/SHARED-SKILLS.md) first. The library is mentioned here and is not a skill reference. pier-bell. See local/shared/skills/dock-line. call log. skills/wharf-bell/SKILL.md
 
 | Action | Read first (kb files, then skills, in order) | Hard rule |
 |---|---|---|
@@ -147,6 +190,7 @@ Read the [shared skills index](../../../local/shared/SHARED-SKILLS.md) first. Th
 | spaced note | `kb/prefs/notes.md` | Keep  two spaces and an\u00a0nbsp. |
 | pier notes | `kb/prefs/notes.md`, skill `ledger` | Do not paraphrase the owner's "pier" notes. |
 | tide bell | %s | Ring the tide bell only for the pier. |
+| trail note | `kb/prefs/notes.md` | Keep the end   |
 """ % long_ptr
 arch_actions = """---
 type: actions-index
@@ -213,11 +257,14 @@ echo "$ERR" | grep -q 'FAIL cargo-crier: compiled prompt is ' || fail "over-cap 
 echo "$ERR" | grep 'FAIL cargo-crier: compiled prompt is '
 echo "$ERR" | grep 'action-index '
 echo "$ERR" | grep 'crate log'
+echo "$ERR" | grep 'Fixed cost '
 echo "$ERR" | grep -q 'Largest sections:' || fail "over-cap report missing sections"
 echo "$ERR" | grep -q 'Largest rows:' || fail "over-cap report missing rows"
 echo "$ERR" | grep -q 'duplicate skill row ledger' || fail "duplicate skill was silent: $ERR"
 echo "$ERR" | awk '/Largest sections:/{getline; print; exit}' | grep -q '^  action-index ' || fail "largest section is not the action index: $ERR"
+echo "$ERR" | grep -q 'The overflow is this bot'"'"'s own action index' || fail "over-cap blamed the shared cost: $ERR"
 echo "$ERR" | grep -q 'The fix is for this bot to shorten its own ACTIONS.md rows. Hard rules are copied verbatim and are never truncated.' || fail "missing shorten guidance"
+echo "$ERR" | grep -q 'Fixed cost ' || fail "over-cap missing fixed cost: $ERR"
 [ -f "$REPO/local/prompts/harbor-clerk.md" ] || fail "clerk prompt missing"
 [ -f "$REPO/local/prompts/pier-archivist.md" ] || fail "archivist prompt missing"
 [ ! -e "$REPO/local/prompts/cargo-crier.md" ] || fail "over-cap prompt was written"
@@ -228,9 +275,17 @@ pass "over cap fails and names the action index"
 python3 - "$REPO" <<'PY'
 import pathlib, sys
 root = pathlib.Path(sys.argv[1])
+def parts(text):
+    a = text.find("\n## Action index\n")
+    b = text.find("\n## Shared skills\n")
+    action = text[a:b] if a >= 0 and b > a else ""
+    return len(text) - len(action), len(action)
 for slug in ("harbor-clerk", "pier-archivist"):
     text = (root / "local/prompts" / f"{slug}.md").read_text()
+    fixed, action = parts(text)
     print(f"SIZE {slug} {len(text)}")
+    print(f"FIXED {slug} {fixed}")
+    print(f"ACTION {slug} {action}")
 PY
 
 clerk() { cat "$REPO/local/prompts/harbor-clerk.md"; }
@@ -260,7 +315,9 @@ clerk | grep -q 'Never split on a \| pipe.' || fail "escaped pipe was split"
 clerk | grep -q 'owner calendar wins' || fail "owner-preference row was dropped"
 clerk | grep -q 'Keep  two spaces' || fail "internal spaces were collapsed"
 python3 -c 'import pathlib,sys; t=pathlib.Path("'"$REPO"'/local/prompts/harbor-clerk.md").read_text(); sys.exit(0 if "Keep  two spaces and an\u00a0nbsp." in t else 1)' || fail "NBSP was stripped"
-clerk | grep -q 'Stop before anything irreversible.' || fail "missing irreversible stop"
+clerk | grep -F -q '4. If no row exists, act thoughtfully: do the reversible part, and before anything irreversible (send, buy, book, post, delete) stop and ask the owner; when the same ask repeats, add a row to your ACTIONS.md.' || fail "missing step 4"
+clerk | grep -q 'kb/INDEX.md' || fail "missing re-read list"
+clerk | grep -q "today's journal" || fail "missing journal re-read"
 clerk | grep -q 'A summary carries no duties' || fail "missing summary step 0"
 clerk | grep -q 'build-prompt.sh --check <slug>' || fail "missing slug check"
 clerk | grep -q 'carrying out something you proposed earlier' || fail "missing earlier-proposal clause"
@@ -279,6 +336,24 @@ clerk | grep -q 'The builder fast-forward is the only routine' && fail "builder 
 clerk | grep -q -- '- ledger |' || fail "referenced skill missing"
 clerk | grep -q 'shelf-index' && fail "bare location word library pulled in a skill" || true
 arch | grep -q 'shelf-index' && fail "bare location word library pulled in a skill for the builder" || true
+clerk | grep -q -- '- pier-bell |' || fail "trailing punctuation hid the skill name"
+clerk | grep -q -- '- dock-line |' || fail "second backticked path was not a candidate"
+clerk | grep -q -- '- call-log |' || fail "backticked phrase with trailing punctuation missed"
+clerk | grep -q -- '- wharf-bell |' || fail "skills/<name> path segment missed"
+arch | grep -q -- '- pier-bell |' && fail "name match leaked to the builder" || true
+arch | grep -q -- '- dock-line |' && fail "path match leaked to the builder" || true
+arch | grep -q -- '- call-log |' && fail "phrase match leaked to the builder" || true
+arch | grep -q -- '- wharf-bell |' && fail "skills segment leaked to the builder" || true
+clerk | grep -q 'kb/prefs/ledger.md' || fail "skill read-first target missing"
+clerk | grep -q 'kb/prefs/notes.md' || fail "skill read-first link missing"
+clerk | grep -q 'local/shared/skills/tide-table/SKILL.md' || fail "relative preference link was not rewritten"
+clerk | grep -q '\.\./\.\./' && fail "compiled prompt kept a ../ link" || true
+clerk | grep -q 'builder wins' && fail "builder preference reached the clerk" || true
+clerk | grep -q 'nowhere' && fail "unrelated preference reached the clerk" || true
+arch | grep -q 'owner calendar wins' && fail "calendar preference reached the builder" || true
+arch | grep -q 'builder wins' || fail "applies-to role missed the builder"
+arch | grep -q 'nowhere' && fail "unrelated preference reached the builder" || true
+python3 -c 'import pathlib,sys; t=pathlib.Path("'"$REPO"'/local/prompts/harbor-clerk.md").read_text(); sys.exit(0 if "Keep the end  " in t else 1)' || fail "trailing spaces were stripped"
 clerk | grep -q -- '- tide-table |' || fail "role skill missing"
 clerk | grep -q -- '- fleet-change |' || fail "all-roles skill missing"
 clerk | grep -q -- '- rename-bot |' && fail "builder skill leaked to the clerk" || true
@@ -544,7 +619,16 @@ rm -f "$REPO/fleet/roles/retired.md"
 run env BOT_FLEET_PROMPT_BASE=HEAD "$BUILD" --check-versions
 [ "$RC" = 1 ] || fail "deleted kit source should fail"
 echo "$OUT$ERR" | grep -q 'fleet/roles/retired.md: kit prompt source removed' || fail "deletion text: $OUT $ERR"
+printf 'fleet/roles/retired.md\n' > "$REPO/fleet/PROMPT-REMOVALS"
+run env BOT_FLEET_PROMPT_BASE=HEAD "$BUILD" --check-versions
+[ "$RC" = 0 ] || fail "listed removal should pass: $OUT $ERR"
+echo "$OUT" | grep -q 'fleet/PROMPT-REMOVALS' || fail "listed removal was silent: $OUT"
 git -C "$REPO" checkout -q -- fleet/roles/retired.md
+rm -f "$REPO/fleet/PROMPT-REMOVALS"
+run env BOT_FLEET_PROMPT_BASE=0123456789abcdef0123456789abcdef01234567 "$BUILD" --check-versions
+[ "$RC" = 0 ] || fail "unreachable base aborted: $OUT $ERR"
+echo "$ERR" | grep -q 'unreachable' || fail "missing unreachable warning: $ERR"
+echo "$OUT" | grep -q 'skipped (no git base)' || fail "unreachable base did not fall through: $OUT"
 # A local digest change has no kit version and does not fail the bump rule.
 git -C "$REPO" checkout -q -- fleet/rules/startup.md
 printf '\nExtra local sentence.\n' >> "$REPO/local/rules/pier-ledger.md"
