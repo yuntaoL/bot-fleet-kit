@@ -90,21 +90,21 @@ try:
 except ValueError as e:
     assert "skill id" in str(e), e
 own = pb.over_cap_report("y", 9000, 8000, [("thin", "t" * 1000), ("shared-skills", "s" * 2000), ("action-index", "a" * 6000)], [])
-assert "Cut this bot's own action index: cut 1000 characters." in own, own
+assert "Cut this bot's own action index: cut 1000 characters, or ask the owner about the cap." in own, own
 assert "Do not trim" not in own, own
 tie = pb.over_cap_report("z", 9000, 8000, [("thin", "t" * 1000), ("shared-skills", "s" * 4000), ("action-index", "a" * 4000)], [])
-assert "Cut the shared skills: cut 1000 characters." in tie, tie
+assert "Cut the shared skills: cut 1000 characters, or ask the owner about the cap." in tie, tie
 assert "Cut this bot's own action index" not in tie, tie
 try:
-    pb.split_cells("  | a | b |")
+    pb.split_cells("  | a | b |", "local/shared/SHARED-SKILLS.md", 4)
     raise SystemExit("indented row was accepted")
 except ValueError as e:
-    assert "indented" in str(e), e
+    assert "indented" in str(e) and "local/shared/SHARED-SKILLS.md:4" in str(e), e
 try:
-    pb.split_cells("| a | b | ")
+    pb.split_cells("| a | b | ", "local/shared/SHARED-SKILLS.md", 9)
     raise SystemExit("trailing space after the pipe was accepted")
 except ValueError as e:
-    assert "whitespace after the last pipe" in str(e), e
+    assert "whitespace after the last pipe" in str(e) and "local/shared/SHARED-SKILLS.md:9" in str(e), e
 pb.check_applies(["worker", "all", "harbor-clerk"], ["harbor-clerk"], "skill ledger")
 try:
     pb.check_applies(["worker worker"], ["harbor-clerk"], "preference 'paint'")
@@ -116,26 +116,54 @@ try:
     raise SystemExit("unknown slug was accepted")
 except ValueError as e:
     assert "fleet.json" in str(e), e
+trash = """| Action | Hard rule |
+|---|---|
+| mail trash | keep the longer name |
+"""
+only_mail = """| Action | Hard rule |
+|---|---|
+| mail | a whole phrase |
+"""
+calendar = """| Action | Hard rule |
+|---|---|
+| calendar events | ring the bell |
+"""
+assert not pb.loose_match(trash, "mail")
+assert not pb.loose_match(only_mail, "e-mail")
+assert pb.loose_match(calendar, "Calendar events.")
 kept = pb.relevant_prefs(
     [{"cells": ["Calendar events.", "x"], "action": "Calendar events.", "applies": []}],
-    "look up calendar   events now",
+    calendar,
     "harbor-clerk",
     "worker",
     [],
 )
 assert kept, kept
 miss = pb.relevant_prefs(
-    [{"cells": ["crate paint"], "action": "crate paint", "applies": []}],
-    "look up calendar events",
+    [{"cells": ["mail"], "action": "mail", "applies": []}],
+    trash,
     "harbor-clerk",
     "worker",
     [],
 )
 assert not miss, miss
-sheet = pb.rewrite_rel_links("[sheet](../../fleet/skills/tide-table/SKILL.md)")
-bell = pb.rewrite_rel_links("[bell](../../local/shared/skills/tide-table/SKILL.md)")
-assert sheet == "[sheet](../../fleet/skills/tide-table/SKILL.md)", sheet
-assert bell == "[bell](../shared/skills/tide-table/SKILL.md)", bell
+try:
+    pb.parse_applies("worker,", "skill ledger")
+    raise SystemExit("trailing comma was dropped")
+except ValueError as e:
+    assert "blank slot" in str(e) and "skill ledger" in str(e), e
+try:
+    pb.parse_applies(",", "preference 'paint'")
+    raise SystemExit("lone comma was dropped")
+except ValueError as e:
+    assert "blank slot" in str(e) and "preference" in str(e), e
+sheet = pb.rewrite_rel_links("[sheet](../../fleet/skills/tide-table/SKILL.md)", "local/shared/SHARED-SKILLS.md")
+bell = pb.rewrite_rel_links("[bell](../../local/shared/skills/tide-table/SKILL.md)", "local/shared/SHARED-SKILLS.md")
+assert sheet == "[sheet](fleet/skills/tide-table/SKILL.md)", sheet
+assert bell == "[bell](local/shared/skills/tide-table/SKILL.md)", bell
+assert "cut 1000 characters, or ask the owner about the cap" in pb.over_cap_report(
+    "y", 9000, 8000, [("thin", "t" * 1000), ("shared-skills", "s" * 2000), ("action-index", "a" * 6000)], []
+)
 print("unit ok")
 PY
 
@@ -189,6 +217,10 @@ status: seeded
 | crate paint | a generic color | notes | nowhere | |
 """
 open("local/shared/SHARED-SKILLS.md", "w").write(shared)
+os.makedirs("fleet/skills/tide-table", exist_ok=True)
+open("fleet/skills/tide-table/SKILL.md", "w").write("# Tide table\n")
+os.makedirs("local/shared/skills/tide-table", exist_ok=True)
+open("local/shared/skills/tide-table/SKILL.md", "w").write("# Tide table notes\n")
 open("local/rules/pier-ledger.md", "w").write("""---
 id: pier-ledger
 applies_to:
@@ -309,6 +341,7 @@ echo "$ERR" | grep -q 'Largest rows:' || fail "over-cap report missing rows"
 echo "$ERR" | grep -q 'duplicate skill row ledger' || fail "duplicate skill was silent: $ERR"
 echo "$ERR" | awk '/Largest sections:/{getline; print; exit}' | grep -q '^  action-index ' || fail "largest section is not the action index: $ERR"
 echo "$ERR" | grep -q 'Cut this bot'"'"'s own action index: cut ' || fail "over-cap did not blame the action index: $ERR"
+echo "$ERR" | grep -q 'or ask the owner about the cap' || fail "over-cap omitted the cap advice: $ERR"
 echo "$ERR" | grep -q 'Shorten those ACTIONS.md rows. Hard rules are copied verbatim and are never truncated.' || fail "missing shorten guidance"
 echo "$ERR" | grep -q 'Fixed cost ' || fail "over-cap missing fixed cost: $ERR"
 echo "$ERR" | grep -q 'Shared skills ' || fail "over-cap missing shared skills: $ERR"
@@ -401,8 +434,11 @@ arch | grep -q -- '- call-log |' && fail "phrase match leaked to the builder" ||
 arch | grep -q -- '- wharf-bell |' && fail "skills segment leaked to the builder" || true
 clerk | grep -q 'kb/prefs/ledger.md' || fail "skill read-first target missing"
 clerk | grep -q 'kb/prefs/notes.md' || fail "skill read-first link missing"
-clerk | grep -F -q '../shared/skills/tide-table/SKILL.md' || fail "preference link does not resolve from local/prompts"
-clerk | grep -F -q '../../fleet/skills/tide-table/SKILL.md' || fail "skill link does not resolve from local/prompts"
+clerk | grep -F -q 'local/shared/skills/tide-table/SKILL.md' || fail "preference link was not a repo-root path"
+clerk | grep -F -q 'fleet/skills/tide-table/SKILL.md' || fail "skill link was not a repo-root path"
+[ -f "$REPO/fleet/skills/tide-table/SKILL.md" ] || fail "fixture skill file missing"
+[ -f "$REPO/local/shared/skills/tide-table/SKILL.md" ] || fail "fixture preference target missing"
+python3 -c 'import pathlib,re,sys; t=pathlib.Path(sys.argv[1]).read_text(); bad=re.findall(r"(?:\(|`)(\.\./[^)`\s]*)", t); sys.exit("emitted ../ path: %s" % bad if bad else 0)' "$REPO/local/prompts/harbor-clerk.md" || fail "compiled prompt emitted a ../ path"
 clerk | grep -q 'builder wins' && fail "builder preference reached the clerk" || true
 clerk | grep -q 'nowhere' && fail "unrelated preference reached the clerk" || true
 arch | grep -q 'owner calendar wins' && fail "calendar preference reached the builder" || true

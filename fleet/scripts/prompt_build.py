@@ -101,20 +101,30 @@ def pad_strip(cell):
     return cell
 
 
-def split_cells(line):
+def split_cells(line, origin=None, row=None):
     """Split one markdown table row. Escaped \\| and pipes inside backticks stay in the cell.
 
     A row that ends in \\| has no closing pipe. That is a build failure, not a cell that ends in \\.
+    origin and row name the file and the line when the row is indented or has trailing space.
     """
+    def fail(msg):
+        where = ""
+        if origin:
+            where = "%s" % origin
+            if row is not None:
+                where += ":%s" % row
+            where += ": "
+        raise ValueError(where + msg)
+
     s = line.strip("\n")
     if s != s.lstrip(" \t") and s.lstrip(" \t").startswith("|"):
-        raise ValueError("table row is indented; move it to the start of the line: %s" % s.strip())
+        fail("table row is indented; move it to the start of the line: %s" % s.strip())
     if s != s.rstrip(" \t") and s.rstrip(" \t").endswith("|"):
-        raise ValueError("table row has whitespace after the last pipe: %s" % s.strip())
+        fail("table row has whitespace after the last pipe: %s" % s.strip())
     if s.startswith("|"):
         s = s[1:]
     if not s.endswith("|"):
-        raise ValueError("table row has no closing pipe: %s" % line.strip())
+        fail("table row has no closing pipe: %s" % line.strip())
     slashes = 0
     i = len(s) - 2
     while i >= 0 and s[i] == "\\":
@@ -378,11 +388,11 @@ def parse_tables(text, origin):
             continue
         block = []
         while i < len(lines) and lines[i].lstrip().startswith("|"):
-            block.append(lines[i])
+            block.append((i + 1, lines[i]))
             i += 1
         rows = []
-        for ln in block:
-            cells = split_cells(ln)
+        for lineno, ln in block:
+            cells = split_cells(ln, origin, lineno)
             if is_separator(cells):
                 continue
             rows.append(cells)
@@ -424,7 +434,7 @@ def cell_at(cells, i):
     return cells[i]
 
 
-def action_lines(text):
+def action_lines(text, source="bots/unknown/kb/ACTIONS.md"):
     """One line per consumed row. Read-first and hard rule are the cell text, not a shortened form."""
     lines, widths = [], []
     for header, rows in parse_tables(text, "ACTIONS.md"):
@@ -439,6 +449,8 @@ def action_lines(text):
                 continue
             if not name.strip(" "):
                 continue
+            read = rewrite_rel_links(read, source)
+            hard = rewrite_rel_links(hard, source)
             line = "- %s | %s | %s" % (name, read, hard)
             lines.append(line)
             widths.append((name, len(line)))
@@ -473,7 +485,7 @@ def skill_rows(text):
                 name = raw.strip("`").lower()
                 if not SKILL_ID.fullmatch(name):
                     raise ValueError("SHARED-SKILLS.md: %r is not a skill id" % raw)
-                applies = [p.strip(" `").lower() for p in cell_at(cells, pc).split(",") if p.strip(" `")]
+                applies = parse_applies(cell_at(cells, pc), "skill %s" % name)
                 rows_out.append({
                     "name": name,
                     "actions": cell_at(cells, ac),
@@ -486,12 +498,11 @@ def skill_rows(text):
         if ac is not None and (rc is not None or hc is not None or col_index(header, "override") is not None or col_index(header, "pointer") is not None):
             apc = col_exact(header, "applies to")
             for cells in rows:
-                applies = []
-                if apc is not None:
-                    applies = [p.strip(" `").lower() for p in cell_at(cells, apc).split(",") if p.strip(" `")]
+                action = cell_at(cells, ac)
+                applies = parse_applies(cell_at(cells, apc), "preference %r" % action) if apc is not None else []
                 prefs.append({
                     "cells": cells,
-                    "action": cell_at(cells, ac),
+                    "action": action,
                     "applies": applies,
                 })
             continue
@@ -584,26 +595,45 @@ def read_targets(cell):
     return out
 
 
-def rewrite_rel_links(text, source="local/shared/SHARED-SKILLS.md", prompt_dir="local/prompts"):
-    """Rewrite a ../ link so it resolves from local/prompts/<slug>.md.
+def parse_applies(cell, what):
+    """Comma-separated Applies to. A blank slot such as 'worker,' or ',' fails and names the row."""
+    raw = (cell or "").strip()
+    if not raw:
+        return []
+    out = []
+    for part in raw.split(","):
+        piece = part.strip().strip("`").strip()
+        if not piece:
+            raise ValueError(
+                "SHARED-SKILLS.md: Applies to in %s has a blank slot (%r); name a role, a slug, or all"
+                % (what, raw)
+            )
+        out.append(piece.lower())
+    return out
 
-    The link is first resolved against the source file, then expressed relative to the
-    compiled prompt's directory.
+
+def rewrite_rel_links(text, source="local/shared/SHARED-SKILLS.md"):
+    """Rewrite a source-relative link to a repo-root path.
+
+    Bots resolve paths from the worktree root, not from local/prompts. A link such as
+    ../../fleet/skills/x/SKILL.md in local/shared/SHARED-SKILLS.md becomes
+    fleet/skills/x/SKILL.md. The source file's directory is the base. A path that
+    would leave the repo fails. Links with no .. are left as written.
     """
-    base = os.path.dirname(source)
+    base = os.path.dirname(source) or "."
 
     def one(target):
         path, frag = target, ""
         if "#" in path:
             path, frag = path.split("#", 1)
             frag = "#" + frag
-        if ".." not in path.split("/"):
+        parts = path.split("/")
+        if ".." not in parts and not path.startswith("./"):
             return target
         norm = os.path.normpath(os.path.join(base, path)).replace("\\", "/")
         if norm.startswith("../") or norm == ".." or os.path.isabs(norm):
-            raise ValueError("link leaves the repo: %s" % target)
-        rel = os.path.relpath(norm, prompt_dir).replace("\\", "/")
-        return rel + frag
+            raise ValueError("link leaves the repo: %s (from %s)" % (target, source))
+        return norm + frag
 
     def link_repl(m):
         return m.group(1) + "(" + one(m.group(2)) + ")"
@@ -635,17 +665,38 @@ def skill_lines(rows):
     return lines
 
 
-def loose(text):
-    """Lowercase, and treat punctuation and whitespace as the same gap."""
-    return " ".join(re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).split())
+def phrase_key(text):
+    """Whole phrase: case and edge punctuation and extra spaces fold. A hyphen stays in the token."""
+    s = (text or "").strip().strip("`").lower()
+    s = s.strip(" \t.,;:)]")
+    return re.sub(r"\s+", " ", s)
+
+
+def action_phrases(text):
+    """Action-column cells. A preference matches one of these whole phrases, not a shorter word inside it."""
+    try:
+        tables = parse_tables(text, "ACTIONS.md")
+    except ValueError:
+        return []
+    names = []
+    for header, rows in tables:
+        ac = col_index(header, "action")
+        if ac is None:
+            continue
+        for cells in rows:
+            names.append(cell_at(cells, ac))
+    return names
 
 
 def loose_match(text, phrase):
-    """Fallback relevance: case, punctuation, and extra spaces do not hide a phrase."""
-    phrase_n = loose(phrase)
-    if not phrase_n:
+    """Whole-phrase match. 'mail' does not match 'mail trash'. 'e-mail' does not match 'mail'."""
+    want = phrase_key(phrase)
+    if not want:
         return False
-    return _token(loose(text), phrase_n)
+    phrases = action_phrases(text)
+    if not phrases:
+        phrases = [text]
+    return any(phrase_key(p) == want for p in phrases)
 
 
 def known_slugs(fleet):
@@ -804,17 +855,17 @@ def over_cap_report(slug, total, cap, sections, row_sizes=None):
         lines.append("  %s %d" % (name, n))
     if label == "action index":
         lines.append(
-            "Cut this bot's own action index: cut %d characters. Shorten those ACTIONS.md rows. Hard rules are copied verbatim and are never truncated."
+            "Cut this bot's own action index: cut %d characters, or ask the owner about the cap. Shorten those ACTIONS.md rows. Hard rules are copied verbatim and are never truncated."
             % overflow
         )
     elif label == "shared skills":
         lines.append(
-            "Cut the shared skills: cut %d characters. Do not trim this bot's ACTIONS.md for a shared cost."
+            "Cut the shared skills: cut %d characters, or ask the owner about the cap. Do not trim this bot's ACTIONS.md for a shared cost."
             % overflow
         )
     else:
         lines.append(
-            "Cut the fixed cost: cut %d characters. Do not trim this bot's ACTIONS.md for a fixed cost."
+            "Cut the fixed cost: cut %d characters, or ask the owner about the cap. Do not trim this bot's ACTIONS.md for a fixed cost."
             % overflow
         )
     return "\n".join(lines)
@@ -875,7 +926,7 @@ def compile_bot(fleet, bot, items, cap):
     chosen.sort(key=lambda s: s["id"])
     gists = [(s["id"], s["digest"]) for s in chosen if s["id"] != "startup"]
     try:
-        actions, row_sizes = action_lines(actions_text)
+        actions, row_sizes = action_lines(actions_text, actions_path)
         skill_table, pref_rows = skill_rows(shared_text)
         slugs = known_slugs(fleet)
         for row in skill_table:
@@ -1336,7 +1387,7 @@ def lines_at(rev, slug, role):
     except UnicodeDecodeError:
         return None, None
     try:
-        actions, _sizes = action_lines(atext)
+        actions, _sizes = action_lines(atext, "bots/%s/kb/ACTIONS.md" % slug)
         table, prefs = skill_rows(stext)
         picked, _warns = relevant_skills(atext, table, role)
         kept = relevant_prefs(prefs, atext, slug, role, picked)
