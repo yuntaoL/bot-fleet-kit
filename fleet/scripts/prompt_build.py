@@ -613,50 +613,99 @@ def parse_applies(cell, what):
 
 
 _SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
-# Already a worktree-root pointer. kb/ is the bot's own index convention, not a
-# path relative to the file that mentions it.
-_ROOT_PREFIXES = ("fleet/", "local/", "bots/", "templates/", "kb/")
+_BOT_KB = re.compile(r"^bots/([^/]+)/")
 
 
-def _looks_like_path(path):
-    """A backtick is a path when it has a slash, a dot-segment, or a file extension."""
-    path = (path or "").split("#", 1)[0]
-    if not path or path.startswith("#"):
+def _leave_unchanged(raw):
+    """Tokens that are never paths: anchors, URLs, home paths, placeholders, prose."""
+    if not raw or raw.startswith("#"):
+        return True
+    if raw.startswith("~"):
+        return True
+    if "<" in raw and ">" in raw:
+        return True
+    if any(ch.isspace() for ch in raw):
+        return True
+    if _SCHEME.match(raw):
+        return True
+    return False
+
+
+def _tracked(path):
+    """True when path is a git-index file, or a directory prefix of one."""
+    path = path.replace("\\", "/").rstrip("/")
+    if not path or path.startswith(".."):
         return False
-    if path.startswith("./") or path.startswith("../") or path.startswith("."):
-        return True
-    if "/" in path:
-        return True
-    return re.search(r"\.[A-Za-z0-9]+$", path) is not None
+    root = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    if root.returncode != 0:
+        return False
+    listed = subprocess.run(
+        ["git", "ls-files", "--", path], cwd=root.stdout.strip(), capture_output=True, text=True
+    )
+    if listed.returncode != 0:
+        return False
+    for line in listed.stdout.splitlines():
+        if line == path or line.startswith(path + "/"):
+            return True
+    return False
+
+
+def _kb_path(path, source):
+    """There is no top-level kb/. ACTIONS means this bot's kb; a shared row must name the bot."""
+    rest = path[3:] if path.startswith("kb/") else ""
+    src = source.replace("\\", "/")
+    bot = _BOT_KB.match(src)
+    if bot and "/kb/" in src:
+        slug = bot.group(1)
+        rewritten = ("bots/%s/kb/%s" % (slug, rest)) if rest else ("bots/%s/kb" % slug)
+        return rewritten
+    raise ValueError(
+        "kb/ path %r in %s needs an explicit bots/<slug>/kb/ path; there is no top-level kb/"
+        % (path, source)
+    )
 
 
 def rewrite_rel_links(text, source="local/shared/SHARED-SKILLS.md"):
-    """Rewrite every relative target to a repo-root path.
+    """Rewrite a relative target to a repo-root path, from the source file's directory.
 
-    Bots open paths from the worktree root. bare, ./, and ../ targets in markdown
-    links and backticks are resolved from the source file's directory. A scheme URL
-    and a pure #anchor are left alone. A fragment stays on the resolved path. A
-    path that leaves the repo fails. Paths that already start at fleet/, local/,
-    bots/, templates/, or kb/ are already root pointers and stay as written.
+    `..` is always resolved, so a link that leaves the repo still fails the build.
+    A bare name or a `./` target is rewritten only when the resolved path is a tracked
+    file or a tracked directory prefix. Otherwise it is left unchanged, which keeps
+    timezones, domains, version strings, and words like and/or. A trailing slash is
+    kept. Scheme URLs, pure #anchors, `~` paths, `<...>` placeholders, and whitespace
+    are never rewritten.
     """
     base = os.path.dirname(source) or "."
 
     def one(target):
         raw = target.strip()
-        if not raw or raw.startswith("#") or _SCHEME.match(raw):
+        if _leave_unchanged(raw):
             return target
         path, frag = raw, ""
         if "#" in raw:
             path, frag = raw.split("#", 1)
             frag = "#" + frag
-        if not path or path.startswith("#"):
+        if not path:
             return target
-        if path.startswith("/") or any(path.startswith(p) for p in _ROOT_PREFIXES):
+        trailing = path.endswith("/")
+        body = path[:-1] if trailing else path
+        if body == "kb" or body.startswith("kb/"):
+            rewritten = _kb_path(body, source)
+            if trailing:
+                rewritten += "/"
+            return rewritten + frag
+        if body.startswith("/"):
             return target
-        norm = os.path.normpath(os.path.join(base, path)).replace("\\", "/")
+        norm = os.path.normpath(os.path.join(base, body)).replace("\\", "/")
         if norm.startswith("../") or norm == ".." or os.path.isabs(norm):
             raise ValueError("link leaves the repo: %s (from %s)" % (target, source))
-        return norm + frag
+        if trailing:
+            norm += "/"
+        if ".." in body.split("/"):
+            return norm + frag
+        if _tracked(norm.rstrip("/")):
+            return norm + frag
+        return target
 
     def link_repl(m):
         return m.group(1) + "(" + one(m.group(2)) + ")"
@@ -664,12 +713,16 @@ def rewrite_rel_links(text, source="local/shared/SHARED-SKILLS.md"):
     text = re.sub(r"(\[[^\]]*\])\(([^)]+)\)", link_repl, text)
 
     def tick_repl(m):
-        inner = m.group(1)
-        if not _looks_like_path(inner):
-            return m.group(0)
-        return "`" + one(inner) + "`"
+        return "`" + one(m.group(1)) + "`"
 
-    return re.sub(r"`([^`]+)`", tick_repl, text)
+    text = re.sub(r"`([^`]+)`", tick_repl, text)
+    src = source.replace("\\", "/")
+    if not (_BOT_KB.match(src) and "/kb/" in src) and re.search(r"(?<![\w./-])kb/", text):
+        raise ValueError(
+            "kb/ path in %s needs an explicit bots/<slug>/kb/ path; there is no top-level kb/"
+            % source
+        )
+    return text
 
 
 def skill_lines(rows):

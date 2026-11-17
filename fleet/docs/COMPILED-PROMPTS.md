@@ -47,7 +47,7 @@ Shared skills (`local/shared/SHARED-SKILLS.md`), for each bot:
 - Also include a skill row when the Applies to cell lists the bot's role, or `all`.
 - An empty Applies to cell is reference-only. It is not given to every bot.
 - The skill line carries the Read-first column's backticked paths and link targets. The long "when to use" cell is not copied.
-- An owner-preference row is not copied to every bot. An Applies to cell lists slugs, roles, or `all`. An empty cell is included only when its action, or a skill it names, matches that bot's ACTIONS or a skill row already chosen. A relative link (`neighbor.md`, `./x.md`, `../x.md`, `sub/bare.md`), in a markdown link or in backticks, is resolved from the source file and written as a repo-root path. A scheme URL and a pure `#anchor` stay as written. A path that leaves the repo fails that bot's build. Paths that already start at `fleet/`, `local/`, `bots/`, `templates/`, or `kb/` are left as written.
+- An owner-preference row is not copied to every bot. An Applies to cell lists slugs, roles, or `all`. An empty cell is included only when its action, or a skill it names, matches that bot's ACTIONS or a skill row already chosen. A `..` link is always resolved from the source file to a repo-root path, and a link that leaves the repo fails that bot's build. A bare name or a `./` target is rewritten only when that resolved path is a tracked file or a tracked directory; otherwise it is left unchanged. A scheme URL, a pure `#anchor`, a `~` path, a `<...>` placeholder, and any token with whitespace stay as written. A trailing slash is kept. There is no top-level `kb/`: from `bots/<slug>/kb/ACTIONS.md`, `kb/x` becomes `bots/<slug>/kb/x`; from the shared skills index it fails the build and asks for an explicit `bots/<slug>/kb/` path.
 
 Rule digests (`fleet/rules/*.md`, `fleet/roles/*.md`, `local/rules/*.md`):
 
@@ -90,11 +90,11 @@ Measured on the fixture fleet in `fleet/scripts/test-build-prompt.sh` (fictional
 
 | Bot | Characters | Fixed | Action index | Shared skills |
 |---|---:|---:|---:|---:|
-| harbor-clerk | 5027 | 3661 | 712 | 654 |
+| harbor-clerk | 5207 | 3661 | 838 | 708 |
 | pier-archivist | 4082 | 3716 | 122 | 244 |
-| cargo-crier | 15985 | 3600 | 12055 | 330 |
+| cargo-crier | 16038 | 3600 | 12072 | 366 |
 
-cargo-crier's largest row, crate log, is 12036 characters. The action index is strictly the largest part, so the report says to cut 7985 characters from that index. The board fixture in `test-board.sh` writes `local/prompts/mina.md` at 3689 characters.
+cargo-crier's largest row, crate log, is 12053 characters. The action index is strictly the largest part, so the report says to cut 8038 characters from that index. The board fixture in `test-board.sh` writes `local/prompts/mina.md` at 3699 characters.
 
 ## One approval for a kit release
 

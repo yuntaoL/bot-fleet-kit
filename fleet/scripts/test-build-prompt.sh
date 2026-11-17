@@ -157,27 +157,55 @@ try:
     raise SystemExit("lone comma was dropped")
 except ValueError as e:
     assert "blank slot" in str(e) and "preference" in str(e), e
-src = "local/shared/SHARED-SKILLS.md"
-def rw(text):
-    return pb.rewrite_rel_links(text, src)
-# markdown and backtick, for bare, ./, and ../
-assert rw("[n](neighbor.md)") == "[n](local/shared/neighbor.md)"
-assert rw("`neighbor.md`") == "`local/shared/neighbor.md`"
-assert rw("[n](sub/bare.md)") == "[n](local/shared/sub/bare.md)"
-assert rw("`sub/bare.md`") == "`local/shared/sub/bare.md`"
-assert rw("[n](./x.md)") == "[n](local/shared/x.md)"
-assert rw("`./x.md`") == "`local/shared/x.md`"
-assert rw("[n](../../fleet/skills/tide-table/SKILL.md)") == "[n](fleet/skills/tide-table/SKILL.md)"
-assert rw("`../../fleet/skills/tide-table/SKILL.md`") == "`fleet/skills/tide-table/SKILL.md`"
-assert rw("[n](./x.md#part)") == "[n](local/shared/x.md#part)"
-assert rw("[u](https://example.com/a/../b)") == "[u](https://example.com/a/../b)"
-assert rw("`https://example.com/a/../b`") == "`https://example.com/a/../b`"
-assert rw("[a](#section)") == "[a](#section)"
-assert rw("`#section`") == "`#section`"
-assert rw("[h](kb/prefs/calendar.md)") == "[h](kb/prefs/calendar.md)"
+src = "fleet/docs/COMPILED-PROMPTS.md"
+def rw(text, source=src):
+    return pb.rewrite_rel_links(text, source)
+# ./ and bare rewrite only when the resolved path is tracked.
+assert rw("[n](./CHANGELOG.md)") == "[n](fleet/docs/CHANGELOG.md)"
+assert rw("`./CHANGELOG.md`") == "`fleet/docs/CHANGELOG.md`"
+assert rw("`./CHANGELOG.md#top`") == "`fleet/docs/CHANGELOG.md#top`"
+assert rw("[n](CHANGELOG.md)") == "[n](fleet/docs/CHANGELOG.md)"
+assert rw("`CHANGELOG.md`") == "`fleet/docs/CHANGELOG.md`"
+# untracked bare and ./ stay, including a trailing slash.
+assert rw("`neighbor.md`") == "`neighbor.md`"
+assert rw("[n](sub/bare.md)") == "[n](sub/bare.md)"
+assert rw("`./missing-nope.md`") == "`./missing-nope.md`"
+assert rw("`.obsidian/`") == "`.obsidian/`"
+# .. is resolved even when the target is not a reason to skip the escape check.
+assert rw("[n](../../fleet/rules/startup.md)", "local/shared/SHARED-SKILLS.md") == "[n](fleet/rules/startup.md)"
+assert rw("`../../fleet/rules/startup.md`", "local/shared/SHARED-SKILLS.md") == "`fleet/rules/startup.md`"
+# never rewrite these, even from an ACTIONS file where a naive join would prefix the bot kb.
+actions = "bots/harbor-clerk/kb/ACTIONS.md"
+for tok in (
+    "~/secrets/STOP",
+    "~/.config/creds",
+    "<control>/STOP",
+    "America/New_York",
+    "app.db",
+    ".obsidian/",
+    "v1.2.3",
+    "example.com",
+    "and/or",
+    "SKILL.md",
+    "calendar",
+    "https://example.com/a/../b",
+    "#section",
+):
+    got = rw("`%s`" % tok, actions)
+    assert got == "`%s`" % tok, (tok, got)
+assert rw("[u](https://example.com/a/../b)", actions) == "[u](https://example.com/a/../b)"
+assert rw("[a](#section)", actions) == "[a](#section)"
+# kb/ from ACTIONS becomes this bot's kb. From the shared index it fails.
+assert rw("`kb/prefs/calendar.md`", actions) == "`bots/harbor-clerk/kb/prefs/calendar.md`"
+assert rw("[h](kb/rules.md#family)", actions) == "[h](bots/harbor-clerk/kb/rules.md#family)"
 try:
-    rw("[n](../../../outside.md)")
-    raise SystemExit("escaping link was rewritten")
+    rw("`kb/prefs/ledger.md`", "local/shared/SHARED-SKILLS.md")
+    raise SystemExit("shared kb/ path was kept")
+except ValueError as e:
+    assert "bots/<slug>/kb/" in str(e), e
+try:
+    rw("[n](../../../../outside.md)", actions)
+    raise SystemExit("ACTIONS escape was rewritten")
 except ValueError as e:
     assert "leaves the repo" in str(e), e
 assert "cut 1000 characters, or ask the owner about the cap" in pb.over_cap_report(
@@ -220,7 +248,7 @@ status: seeded
 |---|---|---|---|---|---|---|
 | fleet-change | Use when a change touches the fleet repo and must be classified before anyone applies it. This sentence must not be copied into the prompt. | repo and fleet changes | builder | `fleet/skills/fleet-change` | all | |
 | rename-bot | Use when renaming a bot display name, slug, worktree or branch. | repo and fleet changes | builder | `fleet/skills/rename-bot` | builder | |
-| ledger | Use when filing pier notes into the ledger skill, including the long explanation that must not be copied into the prompt. | pier notes | builder | `local/shared/skills/ledger` | manager | `kb/prefs/ledger.md` and [notes](kb/prefs/notes.md) |
+| ledger | Use when filing pier notes into the ledger skill, including the long explanation that must not be copied into the prompt. | pier notes | builder | `local/shared/skills/ledger` | manager | `bots/harbor-clerk/kb/prefs/ledger.md` and [notes](bots/harbor-clerk/kb/prefs/notes.md) |
 | tide-table | Use when reading tide times for the pier. | tide times | worker | `local/shared/skills/tide-table` | worker | [sheet](../../fleet/skills/tide-table/SKILL.md) |
 | ledger | Second row of the same skill. | pier notes | builder | `local/shared/skills/ledger` | manager | |
 | shelf-index | Use only when the skill name or its path is named. | shelf | builder | library |  | |
@@ -231,7 +259,7 @@ status: seeded
 
 | Action | Generic default it overrides | Read first | Pointer | Applies to |
 |---|---|---|---|---|
-| Calendar events. | a connector calendar | kb/prefs/calendar.md and [bell](../../local/shared/skills/tide-table/SKILL.md) | owner calendar wins | |
+| Calendar events. | a connector calendar | bots/harbor-clerk/kb/prefs/calendar.md and [bell](../../local/shared/skills/tide-table/SKILL.md) | owner calendar wins | |
 | dock painting | a generic edit | `fleet/docs/CONTRIBUTING.md` | builder wins | builder |
 | crate paint | a generic color | notes | nowhere | |
 """
@@ -412,12 +440,12 @@ clerk | grep -q 'Your worktree is /tmp/example-worktrees/harbor-clerk.' || fail 
 clerk | grep -q 'read `.bot`, open the bot.json it points to' || fail "missing bot pointer"
 clerk | grep -q 'fleet/scripts/sync.sh' || fail "missing journal sync"
 clerk | grep -q 'fail safe' || fail "missing fail-safe"
-clerk | grep -q -- '- calendar events | `kb/prefs/calendar.md`, skill `calendar` | Never write events to a second calendar service.' || fail "calendar row"
+clerk | grep -q -- '- calendar events | `bots/harbor-clerk/kb/prefs/calendar.md`, skill `calendar` | Never write events to a second calendar service.' || fail "calendar row"
 clerk | grep -q 'Do not paraphrase the owner'"'"'s "pier" notes.' || fail "hard rule not verbatim"
 clerk | grep -q 'Ring the tide bell only for the pier.' || fail "tide bell rule"
 clerk | grep -q 'pasted in full into the prompt' || fail "read-first text was shortened"
-clerk | grep -q '\[hours\](kb/prefs/calendar.md)' || fail "markdown link was dropped"
-clerk | grep -q '\[family\](kb/rules.md)' || fail "second link was dropped"
+clerk | grep -q '\[hours\](bots/harbor-clerk/kb/prefs/calendar.md)' || fail "markdown link was dropped"
+clerk | grep -q '\[family\](bots/harbor-clerk/kb/rules.md)' || fail "second link was dropped"
 clerk | grep -q 'Never split on a \| pipe.' || fail "escaped pipe was split"
 clerk | grep -q 'owner calendar wins' || fail "owner-preference row was dropped"
 clerk | grep -q 'Keep  two spaces' || fail "internal spaces were collapsed"
