@@ -211,6 +211,93 @@ except ValueError as e:
 assert "cut 1000 characters, or ask the owner about the cap" in pb.over_cap_report(
     "y", 9000, 8000, [("thin", "t" * 1000), ("shared-skills", "s" * 2000), ("action-index", "a" * 6000)], []
 )
+default_report = pb.over_cap_report(
+    "y", 9000, 8000, [("thin", "t" * 1000), ("shared-skills", "s" * 2000), ("action-index", "a" * 6000)], []
+)
+assert "(cap 8000, default)" in default_report, default_report
+override_report = pb.over_cap_report(
+    "y", 9000, 9500, [("thin", "t" * 1000), ("shared-skills", "s" * 2000), ("action-index", "a" * 6000)], [], "bot.json override"
+)
+assert "(cap 9500, bot.json override)" in override_report, override_report
+assert pb.resolve_bot_cap({}, 8000) == (8000, "default")
+assert pb.resolve_bot_cap({"worktree": "/tmp/example"}, 8000) == (8000, "default")
+assert pb.resolve_bot_cap({"prompt_cap": 9500}, 8000) == (9500, "bot.json override")
+assert pb.resolve_bot_cap({"prompt_cap": 8000}, 9000) == (8000, "bot.json override")
+assert pb.resolve_bot_cap({"prompt_cap": 12000}, 8000) == (12000, "bot.json override")
+for bad in (7999, 12001, 0, -1, True, False, 9500.0, "9500", None, []):
+    try:
+        pb.resolve_bot_cap({"prompt_cap": bad}, 8000)
+        raise SystemExit("accepted prompt_cap %r" % (bad,))
+    except ValueError as e:
+        text = str(e)
+        assert "Traceback" not in text
+        if isinstance(bad, bool) or not isinstance(bad, int):
+            assert "must be an integer" in text, (bad, text)
+        elif bad > 12000:
+            assert "above the ceiling" in text, text
+        else:
+            assert "below the default" in text, (bad, text)
+assert pb.parse_applies("none", "skill quay-note") == ["none"]
+assert pb.parse_applies("NONE", "skill quay-note") == ["none"]
+assert pb.parse_applies("None", "skill quay-note") == ["none"]
+assert pb.parse_applies("`none`", "skill quay-note") == ["none"]
+assert pb.parse_applies("", "skill quay-note") == []
+try:
+    pb.parse_applies("none, harbor-clerk", "skill quay-note")
+    raise SystemExit("mixed none was accepted")
+except ValueError as e:
+    assert "stand alone" in str(e), e
+try:
+    pb.parse_applies("worker, none", "preference 'quay watch'")
+    raise SystemExit("mixed none was accepted")
+except ValueError as e:
+    assert "stand alone" in str(e), e
+try:
+    pb.parse_applies("worker,", "skill quay-note")
+    raise SystemExit("blank slot was accepted")
+except ValueError as e:
+    assert "blank slot" in str(e), e
+pb.check_applies(["none"], ["harbor-clerk"], "skill quay-note")
+try:
+    pb.check_applies(["none", "harbor-clerk"], ["harbor-clerk"], "skill quay-note")
+    raise SystemExit("check_applies accepted mixed none")
+except ValueError as e:
+    assert "stand alone" in str(e), e
+try:
+    pb.check_applies(["nope"], ["harbor-clerk"], "skill quay-note")
+    raise SystemExit("unknown applies was accepted")
+except ValueError as e:
+    assert "fleet.json" in str(e), e
+skipped, _warns = pb.relevant_skills(
+    "see quay-note in the index",
+    [{"name": "quay-note", "location": "`local/shared/skills/quay-note`", "applies": ["none"], "actions": "", "read": "", "hard": None}],
+    "worker",
+)
+assert skipped == [], skipped
+phrase = """| Action | Hard rule |
+|---|---|
+| calendar events | ring the bell |
+"""
+assert pb.relevant_prefs(
+    [{"cells": ["calendar events", "lookup-only-marker"], "action": "calendar events", "applies": ["none"]}],
+    phrase, "harbor-clerk", "worker", [],
+) == []
+assert pb.relevant_prefs(
+    [{"cells": ["calendar events", "owner calendar wins"], "action": "calendar events", "applies": []}],
+    phrase, "harbor-clerk", "worker", [],
+)
+labels = pb.lookup_only_labels("""| Skill | Location | Applies to |
+|---|---|---|
+| quay-note | library | NONE |
+| tide-table | `fleet/skills/tide-table` | worker |
+| quay-note | library | none |
+
+| Action | Read first | Applies to |
+|---|---|---|
+| Calendar events. | notes | none |
+| dock painting | `fleet/docs/CONTRIBUTING.md` | builder |
+""")
+assert labels == ["quay-note", "Calendar events."], labels
 print("unit ok")
 PY
 
@@ -256,12 +343,14 @@ status: seeded
 | dock-line | Use only when a path is named. | dock | worker | `fleet/skills/dock-line` or `local/shared/skills/dock-line` |  | |
 | call-log | Use only when the phrase is named. | calls | worker | the `call log` file |  | |
 | wharf-bell | Use only when the skills path is named. | wharf | worker | library |  | |
+| quay-note | Kept for lookup. This sentence must not be copied into the prompt. | quay | worker | `local/shared/skills/quay-note` | none | |
 
 | Action | Generic default it overrides | Read first | Pointer | Applies to |
 |---|---|---|---|---|
 | Calendar events. | a connector calendar | bots/harbor-clerk/kb/prefs/calendar.md and [bell](../../local/shared/skills/tide-table/SKILL.md) | owner calendar wins | |
 | dock painting | a generic edit | `fleet/docs/CONTRIBUTING.md` | builder wins | builder |
 | crate paint | a generic color | notes | nowhere | |
+| Calendar events. | lookup-only-marker | notes | not this one | none |
 """
 open("local/shared/SHARED-SKILLS.md", "w").write(shared)
 os.makedirs("fleet/skills/tide-table", exist_ok=True)
@@ -303,7 +392,7 @@ status: seeded
 ---
 # Actions index
 
-Read the [shared skills index](../../../local/shared/SHARED-SKILLS.md) first. The library is mentioned here and is not a skill reference. pier-bell. See local/shared/skills/dock-line. call log. skills/wharf-bell/SKILL.md
+Read the [shared skills index](../../../local/shared/SHARED-SKILLS.md) first. The library is mentioned here and is not a skill reference. pier-bell. See local/shared/skills/dock-line. call log. skills/wharf-bell/SKILL.md quay-note
 
 | Action | Read first (kb files, then skills, in order) | Hard rule |
 |---|---|---|
@@ -392,7 +481,8 @@ echo "$ERR" | grep -q 'or ask the owner about the cap' || fail "over-cap omitted
 echo "$ERR" | grep -q 'Shorten those ACTIONS.md rows. Hard rules are copied verbatim and are never truncated.' || fail "missing shorten guidance"
 echo "$ERR" | grep -q 'Fixed cost ' || fail "over-cap missing fixed cost: $ERR"
 echo "$ERR" | grep -q 'Shared skills ' || fail "over-cap missing shared skills: $ERR"
-ERR="$ERR" python3 -c 'import os,re; err=os.environ["ERR"]; m=re.search(r"compiled prompt is (\d+) characters \(cap (\d+)\)", err); n=re.search(r"Cut this bot.s own action index: cut (\d+) characters", err); assert m and n and int(n.group(1))==int(m.group(1))-int(m.group(2)), (m, n)' || fail "cut count is not the overflow: $ERR"
+ERR="$ERR" python3 -c 'import os,re; err=os.environ["ERR"]; m=re.search(r"compiled prompt is (\d+) characters \(cap (\d+), ([^)]+)\)", err); n=re.search(r"Cut this bot.s own action index: cut (\d+) characters", err); assert m and n and m.group(3)=="default" and int(n.group(1))==int(m.group(1))-int(m.group(2)), (m, n)' || fail "cut count is not the overflow: $ERR"
+echo "$ERR" | grep -q 'cap 8000, default' || fail "over-cap did not name the default cap: $ERR"
 [ -f "$REPO/local/prompts/harbor-clerk.md" ] || fail "clerk prompt missing"
 [ -f "$REPO/local/prompts/pier-archivist.md" ] || fail "archivist prompt missing"
 [ ! -e "$REPO/local/prompts/cargo-crier.md" ] || fail "over-cap prompt was written"
@@ -491,6 +581,10 @@ clerk | grep -q 'nowhere' && fail "unrelated preference reached the clerk" || tr
 arch | grep -q 'owner calendar wins' && fail "calendar preference reached the builder" || true
 arch | grep -q 'builder wins' || fail "applies-to role missed the builder"
 arch | grep -q 'nowhere' && fail "unrelated preference reached the builder" || true
+clerk | grep -q 'quay-note' && fail "lookup-only skill was embedded" || true
+arch | grep -q 'quay-note' && fail "lookup-only skill was embedded for the builder" || true
+clerk | grep -q 'lookup-only-marker' && fail "matching phrase plus none was embedded" || true
+arch | grep -q 'lookup-only-marker' && fail "matching phrase plus none was embedded for the builder" || true
 python3 -c 'import pathlib,sys; t=pathlib.Path("'"$REPO"'/local/prompts/harbor-clerk.md").read_text(); sys.exit(0 if "Keep the end  " in t else 1)' || fail "trailing spaces were stripped"
 clerk | grep -q -- '- tide-table |' || fail "role skill missing"
 clerk | grep -q -- '- fleet-change |' || fail "all-roles skill missing"
@@ -609,6 +703,12 @@ run "$BUILD" --check
 [ "$RC" = 1 ] || fail "expected stale before deploy"
 echo "$OUT" | grep -q 'harbor-clerk: stale (not-deployed)' || fail "clerk stale reason: $OUT"
 echo "$OUT" | grep -q 'pier-archivist: stale (not-deployed)' || fail "archivist stale reason: $OUT"
+echo "$OUT" | grep -q 'cargo-crier: stale (over-cap, not-built); cap 8000, default' || fail "check missed the default cap: $OUT"
+echo "$OUT" | grep -q 'cap harbor-clerk: 8000, default' || fail "check missed the clerk cap: $OUT"
+n="$(echo "$OUT" | grep -c '^lookup-only: quay-note$' || true)"
+[ "$n" = 1 ] || fail "lookup-only skill listed $n times: $OUT"
+n="$(echo "$OUT" | grep -c '^lookup-only: Calendar events\.$' || true)"
+[ "$n" = 1 ] || fail "lookup-only preference listed $n times: $OUT"
 run "$BUILD" --check --json
 echo "$OUT" | python3 -c 'import json,sys; r=json.load(sys.stdin); assert r["ok"] is False' || fail "json ok flag"
 # --check must not rewrite prompts.
@@ -869,6 +969,203 @@ run env BOT_NAME=pier-archivist BOT_ROLE=builder "$REPO/fleet/scripts/sync.sh" "
 [ "$RC" = 0 ] || fail "builder sync: $OUT $ERR"
 git -C "$REPO" show --name-only --format= HEAD | grep -q 'local/prompts/harbor-clerk.md' || fail "builder sync missed the prompt"
 pass "sync.sh: builder stages prompts; manager default sync does not"
+
+# Per-bot prompt_cap. lane-marker is a fixture name. Absent stays the 8000 default.
+python3 - "$REPO" "$T" <<'PY'
+import json, os, sys
+root, scratch = sys.argv[1], sys.argv[2]
+os.chdir(root)
+fleet = json.load(open("local/fleet.json"))
+fleet["bots"].append({
+  "slug": "lane-marker", "name": "Lane Marker", "id": "example-lane-marker",
+  "role": "worker", "status": "active", "summary": "Marks a lane.",
+})
+json.dump(fleet, open("local/fleet.json", "w"), indent=2)
+open("local/fleet.json", "a").write("\n")
+d = "bots/lane-marker"
+os.makedirs(d + "/kb", exist_ok=True)
+bj = {
+  "schemaVersion": 1, "display_name": "Lane Marker", "slug": "lane-marker", "role": "worker",
+  "title": "Example title", "agent_id": "example-lane-marker",
+  "worktree": "/tmp/example-worktrees/lane-marker", "owner_name": "Example Owner",
+  "fleet_repo": "example/fleet", "kit_version": "0.12.0", "timezone": "UTC",
+  "prompt_cap": 9500,
+}
+json.dump(bj, open(d + "/bot.json", "w"), indent=2)
+open(d + "/bot.json", "a").write("\n")
+open(d + "/rules.md", "w").write("# Rules\n\nMark the lane.\n")
+open(d + "/kb/ACTIONS.md", "w").write("""---
+type: actions-index
+updated: 2026-01-01
+status: seeded
+---
+# Actions index
+
+| Action | Read first | Hard rule |
+|---|---|---|
+| lane mark | `kb/prefs/lane.md` | m |
+""")
+open(scratch + "/lane-base", "w").write("1")
+print("lane-marker seeded")
+PY
+run "$BUILD" lane-marker
+[ "$RC" = 0 ] || fail "short lane-marker build: $ERR"
+python3 - "$REPO" "$T" <<'PY'
+import pathlib, re, sys
+root, scratch = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+prompt = (root / "local/prompts/lane-marker.md").read_text()
+actions_path = root / "bots/lane-marker/kb/ACTIONS.md"
+actions = actions_path.read_text()
+found = re.search(r"\| (m+) \|$", actions, re.M)
+if not found:
+    raise SystemExit("pad cell missing")
+pad = len(found.group(1)) + (9000 - len(prompt))
+if pad < 1:
+    raise SystemExit("base prompt %d leaves no room under 9000" % len(prompt))
+actions_path.write_text(actions[:found.start(1)] + ("m" * pad) + actions[found.end(1):])
+(scratch / "actions-9000.md").write_text(actions_path.read_text())
+print("pad", pad, "base", len(prompt))
+PY
+run "$BUILD" lane-marker
+[ "$RC" = 0 ] || fail "9000-char override should pass at cap 9500: $ERR"
+python3 -c 'import pathlib,sys; n=len(pathlib.Path(sys.argv[1]).read_text()); assert n==9000, n' "$REPO/local/prompts/lane-marker.md" || fail "override prompt is not 9000 characters"
+run "$BUILD" --check lane-marker
+echo "$OUT" | grep -q 'cap lane-marker: 9500, bot.json override' || fail "check missed the override: $OUT"
+run "$BUILD" --check --json lane-marker
+echo "$OUT" | python3 -c 'import json,sys; r=json.load(sys.stdin); b=next(x for x in r["bots"] if x["slug"]=="lane-marker"); assert b["cap"]==9500 and b["cap_source"]=="bot.json override" and b["characters"]==9000, b' || fail "json override cap: $OUT"
+pass "override allows 9000 characters at cap 9500"
+
+set_lane_cap() {
+  python3 - "$REPO" "$1" <<'PY'
+import json, pathlib, sys
+root, raw = pathlib.Path(sys.argv[1]), sys.argv[2]
+path = root / "bots/lane-marker/bot.json"
+bj = json.loads(path.read_text())
+if raw == "absent":
+    bj.pop("prompt_cap", None)
+elif raw == "true":
+    bj["prompt_cap"] = True
+elif raw == "float":
+    bj["prompt_cap"] = 9500.0
+elif raw == "str":
+    bj["prompt_cap"] = "9500"
+else:
+    bj["prompt_cap"] = int(raw)
+path.write_text(json.dumps(bj, indent=2) + "\n")
+PY
+}
+
+# Shrink the known 9000-character prompt to 8001 (9000 - 8001 = 999).
+python3 - "$REPO" <<'PY'
+import pathlib, re, sys
+root = pathlib.Path(sys.argv[1])
+actions_path = root / "bots/lane-marker/kb/ACTIONS.md"
+actions = actions_path.read_text()
+found = re.search(r"\| (m+) \|$", actions, re.M)
+if not found:
+    raise SystemExit("pad cell missing")
+pad = len(found.group(1)) - 999
+if pad < 1:
+    raise SystemExit("pad too short")
+actions_path.write_text(actions[:found.start(1)] + ("m" * pad) + actions[found.end(1):])
+PY
+set_lane_cap absent
+run "$BUILD" lane-marker
+[ "$RC" != 0 ] || fail "8001 without an override should fail"
+echo "$ERR" | grep -q 'compiled prompt is 8001 characters (cap 8000, default)' || fail "8001 did not fail at the default cap: $ERR"
+echo "$ERR" | grep -q 'Traceback' && fail "8001 printed a traceback: $ERR" || true
+pass "8001 without an override still fails"
+
+set_lane_cap 8000
+run "$BUILD" lane-marker
+[ "$RC" != 0 ] || fail "explicit 8000 should not raise the cap"
+echo "$ERR" | grep -q 'compiled prompt is 8001 characters (cap 8000, bot.json override)' || fail "explicit 8000 report: $ERR"
+echo "$ERR" | grep -q 'Traceback' && fail "explicit 8000 printed a traceback: $ERR" || true
+
+set_lane_cap 12001
+run "$BUILD" lane-marker
+[ "$RC" != 0 ] || fail "cap above the ceiling was accepted"
+echo "$ERR" | grep -q 'FAIL lane-marker:' || fail "ceiling was not a FAIL line: $ERR"
+echo "$ERR" | grep -q 'above the ceiling 12000' || fail "ceiling message: $ERR"
+echo "$ERR" | grep -q 'Traceback' && fail "ceiling printed a traceback: $ERR" || true
+
+set_lane_cap 7999
+run "$BUILD" lane-marker
+[ "$RC" != 0 ] || fail "cap below the default was accepted"
+echo "$ERR" | grep -q 'FAIL lane-marker:' || fail "below-default was not a FAIL line: $ERR"
+echo "$ERR" | grep -q 'below the default 8000' || fail "below-default message: $ERR"
+echo "$ERR" | grep -q 'Traceback' && fail "below-default printed a traceback: $ERR" || true
+
+set_lane_cap str
+run "$BUILD" lane-marker
+[ "$RC" != 0 ] || fail "string prompt_cap was accepted"
+echo "$ERR" | grep -q 'FAIL lane-marker:' || fail "string cap was not a FAIL line: $ERR"
+echo "$ERR" | grep -q 'must be an integer' || fail "string cap message: $ERR"
+echo "$ERR" | grep -q 'Traceback' && fail "string cap printed a traceback: $ERR" || true
+
+set_lane_cap true
+run "$BUILD" lane-marker
+[ "$RC" != 0 ] || fail "boolean prompt_cap was accepted"
+echo "$ERR" | grep -q 'must be an integer' || fail "boolean cap message: $ERR"
+echo "$ERR" | grep -q 'Traceback' && fail "boolean cap printed a traceback: $ERR" || true
+
+set_lane_cap float
+run "$BUILD" lane-marker
+[ "$RC" != 0 ] || fail "float prompt_cap was accepted"
+echo "$ERR" | grep -q 'must be an integer' || fail "float cap message: $ERR"
+
+# Ceiling is inclusive: 12000 accepts the 9000-character prompt.
+cp "$T/actions-9000.md" "$REPO/bots/lane-marker/kb/ACTIONS.md"
+set_lane_cap 12000
+run "$BUILD" lane-marker
+[ "$RC" = 0 ] || fail "cap 12000 should accept 9000 characters: $ERR"
+python3 -c 'import pathlib,sys; n=len(pathlib.Path(sys.argv[1]).read_text()); assert n==9000, n' "$REPO/local/prompts/lane-marker.md" || fail "ceiling prompt is not 9000 characters"
+pass "prompt_cap fail-closed"
+
+python3 - "$REPO" <<'PY'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+try:
+    import jsonschema
+except ImportError:
+    raise SystemExit("jsonschema missing")
+schema = json.load(open(root / "fleet/schema/bot.schema.json"))
+base = json.loads((root / "bots/harbor-clerk/bot.json").read_text())
+assert "prompt_cap" not in base
+jsonschema.validate(base, schema)
+for good in (8000, 9500, 12000):
+    trial = dict(base)
+    trial["prompt_cap"] = good
+    jsonschema.validate(trial, schema)
+# 9500.0 is a whole JSON number. The builder still rejects it; this schema check
+# covers the values draft 2020-12 integer plus minimum and maximum refuse.
+for bad in (7999, 12001, "9500", True, None):
+    trial = dict(base)
+    trial["prompt_cap"] = bad
+    try:
+        jsonschema.validate(trial, schema)
+    except jsonschema.ValidationError:
+        continue
+    raise SystemExit("schema accepted %r" % (bad,))
+print("schema ok")
+PY
+pass "bot.json schema bounds prompt_cap"
+
+# none mixed with a slug fails the build. A lone none stays unembedded (asserted above).
+cp "$REPO/local/shared/SHARED-SKILLS.md" "$T/skills-none.bak"
+cat >> "$REPO/local/shared/SHARED-SKILLS.md" << 'EOF'
+
+| Skill | When to use | Action types covered | Owner | Location | Applies to | Read first |
+|---|---|---|---|---|---|---|
+| mixed-note | out | out | worker | library | none, lane-marker | |
+EOF
+run "$BUILD" lane-marker
+[ "$RC" != 0 ] || fail "none mixed with a slug was accepted"
+echo "$ERR" | grep -q 'FAIL lane-marker:' || fail "mixed none was not a FAIL line: $ERR"
+echo "$ERR" | grep -q 'none must stand alone' || fail "mixed none did not name the cause: $ERR"
+echo "$ERR" | grep -q 'Traceback' && fail "mixed none printed a traceback: $ERR" || true
+cp "$T/skills-none.bak" "$REPO/local/shared/SHARED-SKILLS.md"
+pass "none stands alone and is lookup-only"
 
 echo
 echo "SIZE harbor-clerk $(python3 -c 'print(len(open("'"$REPO"'/local/prompts/harbor-clerk.md").read()))')"

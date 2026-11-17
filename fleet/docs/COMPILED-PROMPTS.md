@@ -46,8 +46,9 @@ Shared skills (`local/shared/SHARED-SKILLS.md`), for each bot:
 - Include a skill row when that bot's `kb/ACTIONS.md` names the skill, `skills/<name>`, or a backticked path from the location cell, on a token boundary. Trailing `. , ; : ) ]` still counts. A location that is only a word, such as `library`, is not a path and does not count.
 - Also include a skill row when the Applies to cell lists the bot's role, or `all`.
 - An empty Applies to cell is reference-only. It is not given to every bot.
+- `none` is reserved. It is case-insensitive and must stand alone. A row marked `none` stays in the shared file for lookup and is embedded in no compiled prompt, even when a bot's index names the skill or the action phrase matches. Mixing `none` with a slug or a role fails that bot's build. A blank slot or an unknown value still fails. `build-prompt.sh --check` lists each lookup-only row once, as `lookup-only`.
 - The skill line carries the Read-first column's backticked paths and link targets. The long "when to use" cell is not copied.
-- An owner-preference row is not copied to every bot. An Applies to cell lists slugs, roles, or `all`. An empty cell is included only when its action, or a skill it names, matches that bot's ACTIONS or a skill row already chosen. A `..` link is always resolved from the source file to a repo-root path, and a link that leaves the repo fails that bot's build. A bare name or a `./` target is rewritten only when that resolved path is a tracked file or a tracked directory; otherwise it is left unchanged. A scheme URL, a pure `#anchor`, a `~` path, a `<...>` placeholder, and any token with whitespace stay as written. A trailing slash is kept. There is no top-level `kb/`: from `bots/<slug>/kb/ACTIONS.md`, `kb/x` becomes `bots/<slug>/kb/x`; from the shared skills index it fails the build and asks for an explicit `bots/<slug>/kb/` path.
+- An owner-preference row is not copied to every bot. An Applies to cell lists slugs, roles, or `all`, or the reserved value `none`. An empty cell is included only when its action, or a skill it names, matches that bot's ACTIONS or a skill row already chosen. `none` is never included. A `..` link is always resolved from the source file to a repo-root path, and a link that leaves the repo fails that bot's build. A bare name or a `./` target is rewritten only when that resolved path is a tracked file or a tracked directory; otherwise it is left unchanged. A scheme URL, a pure `#anchor`, a `~` path, a `<...>` placeholder, and any token with whitespace stay as written. A trailing slash is kept. There is no top-level `kb/`: from `bots/<slug>/kb/ACTIONS.md`, `kb/x` becomes `bots/<slug>/kb/x`; from the shared skills index it fails the build and asks for an explicit `bots/<slug>/kb/` path.
 
 Rule digests (`fleet/rules/*.md`, `fleet/roles/*.md`, `local/rules/*.md`):
 
@@ -82,9 +83,9 @@ Compare is against `BOT_FLEET_PROMPT_BASE` when that commit exists, otherwise th
 
 ## Size
 
-The cap is 8000 characters. Set `prompt_max_chars` in `local/fleet.json`, or `BOT_FLEET_PROMPT_MAX` for one run. The environment variable wins.
+The default cap is 8000 characters. Set `prompt_max_chars` in `local/fleet.json`, or `BOT_FLEET_PROMPT_MAX` for one run. The environment variable wins over `prompt_max_chars`. A bot may set `prompt_cap` in `bots/<slug>/bot.json`. That override is an owner decision. It must be an integer from 8000 through 12000. Absent, the bot uses the fleet cap (the environment variable, then `prompt_max_chars`, then 8000). A value that is not an integer, is below 8000, or is above 12000 fails that bot's build with a `FAIL <slug>:` line. The override is not clamped, and it does not silently lower the default. The over-cap report and `build-prompt.sh --check` name the effective cap and whether it came from the default or from the bot.json override.
 
-Over the cap, the build fails and names three parts: fixed cost (thin prompt, routine, rule gists, footer), the bot's own action index, and skill plus preference rows. It says which part to cut and the exact overflow in characters. The strictly largest part is the one to cut. A tie does not tell the bot to trim ACTIONS.md unless that index is strictly the largest. Hard rules are not truncated. The cap stays 8000.
+Over the cap, the build fails and names three parts: fixed cost (thin prompt, routine, rule gists, footer), the bot's own action index, and skill plus preference rows. It says which part to cut and the exact overflow in characters. The strictly largest part is the one to cut. A tie does not tell the bot to trim ACTIONS.md unless that index is strictly the largest. Hard rules are not truncated. The fleet default stays 8000. The hard ceiling on a per-bot override is 12000.
 
 Measured on the fixture fleet in `fleet/scripts/test-build-prompt.sh` (fictional bots, kit 0.12.0):
 
@@ -114,7 +115,7 @@ Scripts never write the profile. `--mark-deployed` only updates the manifest, an
 
 `fleet/scripts/build-prompt.sh --check` prints a short summary. `--json` prints the same facts as JSON on stdout and the summary on stderr. The exit code is non-zero when any compiled bot is stale or the live profile text does not match.
 
-- **Stale** means the built snapshot differs from the deployed snapshot, or the hashed inputs differ from what was last built, or the prompt was never built or is over the cap.
+- **Stale** means the built snapshot differs from the deployed snapshot, or the hashed inputs differ from what was last built, or the prompt was never built or is over the cap. For each compiled bot the summary names the effective cap and its source (`default` or `bot.json override`). A shared-skills row with Applies to `none` is listed once as `lookup-only`.
 - **Drift** means `description` in `<profiles-dir>/<id>/profile.json` is not the deployed prompt. `<id>` is the bot's id in `local/fleet.json`. The default directory is `/home/box/agent-data/agents`. Set `BOT_FLEET_PROFILES_DIR` to point somewhere else. A missing directory is reported and is not a failure. A description that differs is a failure.
 
 File-mode bots are listed and are not stale. Retired bots are skipped.

@@ -61,6 +61,8 @@ REASON_ORDER = (
 )
 PROFILES_DEFAULT = "/home/box/agent-data/agents"
 CAP_DEFAULT = 8000
+# Hard ceiling for a bot.json prompt_cap. The fleet default stays CAP_DEFAULT.
+CAP_CEILING = 12000
 
 
 def git_out(*args):
@@ -571,10 +573,13 @@ def referenced(actions_text, name, location):
 def relevant_skills(actions_text, rows, role):
     """A row is relevant when ACTIONS.md names it, or Applies to lists the bot's role or all.
 
-    An empty Applies to cell is reference-only. A repeated skill name is kept and warned.
+    An empty Applies to cell is reference-only. Applies to none is lookup-only and is
+    never embedded. A repeated skill name is kept and warned.
     """
     out, seen, warns = [], set(), []
     for row in rows:
+        if row.get("applies") == ["none"]:
+            continue
         if row["name"] in seen:
             warns.append("duplicate skill row %s; both rows are kept" % row["name"])
         seen.add(row["name"])
@@ -609,6 +614,11 @@ def parse_applies(cell, what):
                 % (what, raw)
             )
         out.append(piece.lower())
+    if "none" in out and out != ["none"]:
+        raise ValueError(
+            "SHARED-SKILLS.md: Applies to in %s mixes none with other values (%r); none must stand alone"
+            % (what, raw)
+        )
     return out
 
 
@@ -785,7 +795,14 @@ def known_slugs(fleet):
 
 
 def check_applies(values, slugs, what):
-    """Applies to is comma-separated: all, a known role, or a slug from fleet.json."""
+    """Applies to is comma-separated: all, a known role, a slug from fleet.json, or lone none."""
+    if values == ["none"]:
+        return
+    if "none" in values:
+        raise ValueError(
+            "SHARED-SKILLS.md: Applies to in %s mixes none with other values; none must stand alone"
+            % what
+        )
     allowed = set(ROLES) | set(slugs)
     for raw in values:
         if raw in allowed:
@@ -804,6 +821,7 @@ def check_applies(values, slugs, what):
 def relevant_prefs(prefs, actions_text, slug, role, skill_rows_picked):
     """An Applies to cell lists slugs, roles, or all. An empty cell is relevance-only.
 
+    Applies to none is lookup-only and is never embedded, even when the action phrase matches.
     Relevance is the action, or a skill named in the row, matching this bot's ACTIONS
     or a skill row already chosen for this bot.
     """
@@ -813,6 +831,8 @@ def relevant_prefs(prefs, actions_text, slug, role, skill_rows_picked):
     out = []
     for pref in prefs:
         applies = pref["applies"]
+        if applies == ["none"]:
+            continue
         if applies:
             if "all" in applies or role in applies or slug in applies:
                 out.append(pref)
@@ -880,6 +900,64 @@ def prompt_cap(fleet):
     return raw
 
 
+def resolve_bot_cap(bj, fleet_cap):
+    """Effective cap and its source. Absent prompt_cap keeps the fleet cap.
+
+    A present prompt_cap must be an int from CAP_DEFAULT through CAP_CEILING.
+    Bool is not an int. A bad value raises ValueError and is never clamped.
+    """
+    if not isinstance(bj, dict) or "prompt_cap" not in bj:
+        return fleet_cap, "default"
+    raw = bj["prompt_cap"]
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        raise ValueError(
+            "bot.json prompt_cap must be an integer from %d to %d (got %r)"
+            % (CAP_DEFAULT, CAP_CEILING, raw)
+        )
+    if raw < CAP_DEFAULT:
+        raise ValueError(
+            "bot.json prompt_cap %d is below the default %d; an override cannot lower the cap"
+            % (raw, CAP_DEFAULT)
+        )
+    if raw > CAP_CEILING:
+        raise ValueError(
+            "bot.json prompt_cap %d is above the ceiling %d"
+            % (raw, CAP_CEILING)
+        )
+    return raw, "bot.json override"
+
+
+def lookup_only_labels(text):
+    """Skill names and preference actions whose Applies to is lone none, once each."""
+    rows, prefs = skill_rows(text)
+    labels, seen = [], set()
+
+    def add(label):
+        label = (label or "").strip()
+        if not label or label in seen:
+            return
+        seen.add(label)
+        labels.append(label)
+
+    for row in rows:
+        if row.get("applies") == ["none"]:
+            add(row.get("name"))
+    for pref in prefs:
+        if pref.get("applies") == ["none"]:
+            add(pref.get("action"))
+    return labels
+
+
+def lookup_only_from_repo():
+    path = "local/shared/SHARED-SKILLS.md"
+    if os.path.islink(path) or not os.path.isfile(path):
+        return []
+    try:
+        return lookup_only_labels(read_repo_text(path))
+    except (OSError, ValueError):
+        return []
+
+
 def file_sha(path):
     if not os.path.isfile(path) or os.path.islink(path):
         return None
@@ -897,11 +975,12 @@ def input_record(src):
     }
 
 
-def over_cap_report(slug, total, cap, sections, row_sizes=None):
+def over_cap_report(slug, total, cap, sections, row_sizes=None, source="default"):
     """Three parts: fixed (thin, routine, gists, footer), the action index, and skill plus preference rows.
 
     Cut the strictly largest part. A tie keeps the earlier of shared skills, then fixed cost,
     and does not tell the bot to trim ACTIONS.md unless the action index is strictly largest.
+    source is "default" or "bot.json override".
     """
     fixed_n = action_n = shared_n = 0
     for name, text in sections:
@@ -920,7 +999,7 @@ def over_cap_report(slug, total, cap, sections, row_sizes=None):
         if n > size:
             label, size = name, n
     ranked = sorted(((n, len(t)) for n, t in sections), key=lambda x: (-x[1], x[0]))
-    lines = ["FAIL %s: compiled prompt is %d characters (cap %d)." % (slug, total, cap), "Largest sections:"]
+    lines = ["FAIL %s: compiled prompt is %d characters (cap %d, %s)." % (slug, total, cap, source), "Largest sections:"]
     for name, n in ranked:
         lines.append("  %s %d" % (name, n))
     lines.append("Fixed cost %d (thin prompt, routine, rule gists, footer)." % fixed_n)
@@ -979,6 +1058,10 @@ def compile_bot(fleet, bot, items, cap):
     worktree = bj.get("worktree") or ""
     if not isinstance(worktree, str) or not worktree.strip():
         return {"ok": False, "reason": "bad-source", "error": "bot.json has no worktree"}
+    try:
+        cap, cap_source = resolve_bot_cap(bj, cap)
+    except ValueError as e:
+        return {"ok": False, "reason": "bad-source", "error": str(e)}
     if os.path.islink(actions_path):
         return {"ok": False, "reason": "symlink"}
     if not os.path.isfile(actions_path):
@@ -1042,6 +1125,7 @@ def compile_bot(fleet, bot, items, cap):
         "role_map": {"capabilities": caps, "role": role},
         "over_cap": len(prompt) > cap,
         "cap": cap,
+        "cap_source": cap_source,
         "actions": actions,
         "skills": skills,
         "row_sizes": row_sizes,
@@ -1252,7 +1336,7 @@ def cmd_build(slugs):
             continue
         if compiled["over_cap"]:
             rc = 1
-            print(over_cap_report(slug, len(compiled["prompt"]), cap, compiled["sections"], compiled.get("row_sizes")), file=sys.stderr)
+            print(over_cap_report(slug, len(compiled["prompt"]), compiled["cap"], compiled["sections"], compiled.get("row_sizes"), compiled.get("cap_source") or "default"), file=sys.stderr)
             continue
         manifest = compose_manifest(slug, compiled)
         try:
@@ -1364,9 +1448,9 @@ def check_bot(fleet, bot, items, cap):
         reasons = [r for r in reasons if r not in ("not-deployed", "built-differs-from-deployed", "inputs-changed", "prompt-file-mismatch")]
     entry["reasons"] = ordered_reasons(reasons)
     entry["stale"] = bool(entry["reasons"])
-    if compiled["over_cap"]:
-        entry["characters"] = len(compiled["prompt"])
-        entry["cap"] = cap
+    entry["characters"] = len(compiled["prompt"])
+    entry["cap"] = compiled["cap"]
+    entry["cap_source"] = compiled.get("cap_source") or "default"
     return entry
 
 
@@ -1383,6 +1467,7 @@ def cmd_check(as_json, slugs=None):
         return 0
     items, warns, errors = load_sources()
     report["errors"] = errors
+    report["lookup_only"] = lookup_only_from_repo()
     for w in warns:
         print("WARN " + w, file=sys.stderr)
     cap = prompt_cap(fleet) if not errors else CAP_DEFAULT
@@ -1415,12 +1500,20 @@ def plain_summary(report):
         why = ", ".join(b["reasons"])
         if b.get("error"):
             why = why + "; " + b["error"]
-        lines.append("- %s: stale (%s)" % (b["slug"], why))
+        line = "- %s: stale (%s)" % (b["slug"], why)
+        if "cap" in b:
+            line = "%s; cap %d, %s" % (line, b["cap"], b.get("cap_source") or "default")
+        lines.append(line)
     for b in drifted:
         lines.append("- %s: drift (%s)" % (b["slug"], b["drift_reason"]))
     files = [b["slug"] for b in report["bots"] if b["prompt_mode"] == "files"]
     if files:
         lines.append("file mode: " + ", ".join(files))
+    for label in report.get("lookup_only") or []:
+        lines.append("lookup-only: %s" % label)
+    for b in report["bots"]:
+        if "cap" in b:
+            lines.append("cap %s: %d, %s" % (b["slug"], b["cap"], b.get("cap_source") or "default"))
     return "\n".join(lines) + "\n"
 
 
@@ -1640,7 +1733,7 @@ def mark_deployed(slug):
         print("FAIL %s: %s" % (slug, compiled.get("reason") or compiled.get("error")), file=sys.stderr)
         return 1
     if compiled["over_cap"]:
-        print(over_cap_report(slug, len(compiled["prompt"]), compiled["cap"], compiled["sections"], compiled.get("row_sizes")), file=sys.stderr)
+        print(over_cap_report(slug, len(compiled["prompt"]), compiled["cap"], compiled["sections"], compiled.get("row_sizes"), compiled.get("cap_source") or "default"), file=sys.stderr)
         return 1
     man = load_manifest(slug)
     if not man or not man.get("built"):
