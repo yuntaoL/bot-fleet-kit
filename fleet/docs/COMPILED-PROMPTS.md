@@ -47,7 +47,7 @@ Shared skills (`local/shared/SHARED-SKILLS.md`), for each bot:
 - Also include a skill row when the Applies to cell lists the bot's role, or `all`.
 - An empty Applies to cell is reference-only. It is not given to every bot.
 - The skill line carries the Read-first column's backticked paths and link targets. The long "when to use" cell is not copied.
-- An owner-preference row is not copied to every bot. An Applies to cell lists slugs, roles, or `all`. An empty cell is included only when its action, or a skill it names, matches that bot's ACTIONS or a skill row already chosen. A `../` link in a preference row is rewritten to a repo-relative path.
+- An owner-preference row is not copied to every bot. An Applies to cell lists slugs, roles, or `all`. An empty cell is included only when its action, or a skill it names, matches that bot's ACTIONS or a skill row already chosen. A `../` link in a skill or preference row is rewritten so it resolves from `local/prompts/<slug>.md`.
 
 Rule digests (`fleet/rules/*.md`, `fleet/roles/*.md`, `local/rules/*.md`):
 
@@ -90,11 +90,11 @@ Measured on the fixture fleet in `fleet/scripts/test-build-prompt.sh` (fictional
 
 | Bot | Characters | Fixed | Action index | Shared skills |
 |---|---:|---:|---:|---:|
-| harbor-clerk | 5027 | 3661 | 712 | 654 |
+| harbor-clerk | 5030 | 3661 | 712 | 657 |
 | pier-archivist | 4082 | 3716 | 122 | 244 |
-| cargo-crier | 16127 | 3600 | 12055 | 472 |
+| cargo-crier | 16130 | 3600 | 12055 | 475 |
 
-cargo-crier's largest row, crate log, is 12036 characters. The action index is strictly the largest part, so the report says to cut 8127 characters from that index. The board fixture in `test-board.sh` writes `local/prompts/mina.md` at 3689 characters.
+cargo-crier's largest row, crate log, is 12036 characters. The action index is strictly the largest part, so the report says to cut 8130 characters from that index. The board fixture in `test-board.sh` writes `local/prompts/mina.md` at 3689 characters.
 
 ## One approval for a kit release
 

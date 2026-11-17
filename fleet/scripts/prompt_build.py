@@ -584,8 +584,12 @@ def read_targets(cell):
     return out
 
 
-def rewrite_rel_links(text, source="local/shared/SHARED-SKILLS.md"):
-    """Turn a ../ link in a preference row into a repo-relative path."""
+def rewrite_rel_links(text, source="local/shared/SHARED-SKILLS.md", prompt_dir="local/prompts"):
+    """Rewrite a ../ link so it resolves from local/prompts/<slug>.md.
+
+    The link is first resolved against the source file, then expressed relative to the
+    compiled prompt's directory.
+    """
     base = os.path.dirname(source)
 
     def one(target):
@@ -597,8 +601,9 @@ def rewrite_rel_links(text, source="local/shared/SHARED-SKILLS.md"):
             return target
         norm = os.path.normpath(os.path.join(base, path)).replace("\\", "/")
         if norm.startswith("../") or norm == ".." or os.path.isabs(norm):
-            raise ValueError("preference link leaves the repo: %s" % target)
-        return norm + frag
+            raise ValueError("link leaves the repo: %s" % target)
+        rel = os.path.relpath(norm, prompt_dir).replace("\\", "/")
+        return rel + frag
 
     def link_repl(m):
         return m.group(1) + "(" + one(m.group(2)) + ")"

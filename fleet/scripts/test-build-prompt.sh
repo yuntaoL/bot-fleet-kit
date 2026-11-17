@@ -132,6 +132,10 @@ miss = pb.relevant_prefs(
     [],
 )
 assert not miss, miss
+sheet = pb.rewrite_rel_links("[sheet](../../fleet/skills/tide-table/SKILL.md)")
+bell = pb.rewrite_rel_links("[bell](../../local/shared/skills/tide-table/SKILL.md)")
+assert sheet == "[sheet](../../fleet/skills/tide-table/SKILL.md)", sheet
+assert bell == "[bell](../shared/skills/tide-table/SKILL.md)", bell
 print("unit ok")
 PY
 
@@ -397,9 +401,8 @@ arch | grep -q -- '- call-log |' && fail "phrase match leaked to the builder" ||
 arch | grep -q -- '- wharf-bell |' && fail "skills segment leaked to the builder" || true
 clerk | grep -q 'kb/prefs/ledger.md' || fail "skill read-first target missing"
 clerk | grep -q 'kb/prefs/notes.md' || fail "skill read-first link missing"
-clerk | grep -q 'local/shared/skills/tide-table/SKILL.md' || fail "relative preference link was not rewritten"
-clerk | grep -q 'fleet/skills/tide-table/SKILL.md' || fail "relative skill link was not rewritten"
-clerk | grep -q '\.\./\.\./' && fail "compiled prompt kept a ../ link" || true
+clerk | grep -F -q '../shared/skills/tide-table/SKILL.md' || fail "preference link does not resolve from local/prompts"
+clerk | grep -F -q '../../fleet/skills/tide-table/SKILL.md' || fail "skill link does not resolve from local/prompts"
 clerk | grep -q 'builder wins' && fail "builder preference reached the clerk" || true
 clerk | grep -q 'nowhere' && fail "unrelated preference reached the clerk" || true
 arch | grep -q 'owner calendar wins' && fail "calendar preference reached the builder" || true
