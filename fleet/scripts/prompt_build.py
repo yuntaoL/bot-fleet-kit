@@ -886,45 +886,51 @@ def assemble(thin, pre, gists, actions, skills):
     return "".join(text for _, text in sections), sections
 
 
-def prompt_cap(fleet):
-    env = os.environ.get("BOT_FLEET_PROMPT_MAX", "").strip()
-    if env:
-        if not re.fullmatch(r"[0-9]+", env) or int(env) < 1:
-            sys.exit("build-prompt: BOT_FLEET_PROMPT_MAX must be a positive integer")
-        return int(env)
-    raw = fleet.get("prompt_max_chars")
-    if raw is None:
-        return CAP_DEFAULT
-    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 1:
-        sys.exit("build-prompt: prompt_max_chars must be a positive integer")
+def bound_cap(raw, what):
+    """An integer from CAP_DEFAULT through CAP_CEILING. Bool is not an int. Never clamped."""
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        raise ValueError(
+            "%s must be an integer from %d to %d (got %r)"
+            % (what, CAP_DEFAULT, CAP_CEILING, raw)
+        )
+    if raw < CAP_DEFAULT:
+        raise ValueError("%s %d is below the floor %d" % (what, raw, CAP_DEFAULT))
+    if raw > CAP_CEILING:
+        raise ValueError("%s %d is above the ceiling %d" % (what, raw, CAP_CEILING))
     return raw
 
 
-def resolve_bot_cap(bj, fleet_cap):
-    """Effective cap and its source. Absent prompt_cap keeps the fleet cap.
+def fleet_prompt_cap(fleet):
+    """Fleet-wide cap and its source. Does not look at bot.json.
 
-    A present prompt_cap must be an int from CAP_DEFAULT through CAP_CEILING.
-    Bool is not an int. A bad value raises ValueError and is never clamped.
+    Precedence, highest first: BOT_FLEET_PROMPT_MAX, then local/fleet.json
+    prompt_max_chars, then the default 8000. A present value must be an
+    integer from 8000 through 12000. The floor is 8000 whatever else is set.
+    """
+    env = os.environ.get("BOT_FLEET_PROMPT_MAX", "").strip()
+    if env:
+        if not re.fullmatch(r"[0-9]+", env):
+            raise ValueError(
+                "BOT_FLEET_PROMPT_MAX must be an integer from %d to %d (got %r)"
+                % (CAP_DEFAULT, CAP_CEILING, env)
+            )
+        return bound_cap(int(env), "BOT_FLEET_PROMPT_MAX"), "env"
+    if isinstance(fleet, dict) and "prompt_max_chars" in fleet:
+        return bound_cap(fleet.get("prompt_max_chars"), "prompt_max_chars"), "fleet.json"
+    return CAP_DEFAULT, "default"
+
+
+def resolve_bot_cap(bj, fleet_cap, fleet_source="default"):
+    """Effective cap and its source.
+
+    Precedence: bot.json prompt_cap, then the fleet source passed in
+    (env, fleet.json, or default). Absent prompt_cap keeps that fleet source.
+    The floor is 8000 whatever the configured fleet cap is. A bad value raises
+    ValueError and is never clamped.
     """
     if not isinstance(bj, dict) or "prompt_cap" not in bj:
-        return fleet_cap, "default"
-    raw = bj["prompt_cap"]
-    if isinstance(raw, bool) or not isinstance(raw, int):
-        raise ValueError(
-            "bot.json prompt_cap must be an integer from %d to %d (got %r)"
-            % (CAP_DEFAULT, CAP_CEILING, raw)
-        )
-    if raw < CAP_DEFAULT:
-        raise ValueError(
-            "bot.json prompt_cap %d is below the default %d; an override cannot lower the cap"
-            % (raw, CAP_DEFAULT)
-        )
-    if raw > CAP_CEILING:
-        raise ValueError(
-            "bot.json prompt_cap %d is above the ceiling %d"
-            % (raw, CAP_CEILING)
-        )
-    return raw, "bot.json override"
+        return fleet_cap, fleet_source
+    return bound_cap(bj["prompt_cap"], "bot.json prompt_cap"), "bot.json override"
 
 
 def lookup_only_labels(text):
@@ -1026,7 +1032,7 @@ def over_cap_report(slug, total, cap, sections, row_sizes=None, source="default"
     return "\n".join(lines)
 
 
-def compile_bot(fleet, bot, items, cap):
+def compile_bot(fleet, bot, items, cap, fleet_source="default"):
     slug = bot["slug"]
     role = bot.get("role") or ""
     raw_caps = bot.get("capabilities") or []
@@ -1059,7 +1065,7 @@ def compile_bot(fleet, bot, items, cap):
     if not isinstance(worktree, str) or not worktree.strip():
         return {"ok": False, "reason": "bad-source", "error": "bot.json has no worktree"}
     try:
-        cap, cap_source = resolve_bot_cap(bj, cap)
+        cap, cap_source = resolve_bot_cap(bj, cap, fleet_source)
     except ValueError as e:
         return {"ok": False, "reason": "bad-source", "error": str(e)}
     if os.path.islink(actions_path):
@@ -1105,6 +1111,8 @@ def compile_bot(fleet, bot, items, cap):
         "footer": FOOTER_BODY,
         "header": HEADER,
         "pre_action": startup["digest"],
+        "prompt_cap": cap,
+        "prompt_cap_source": cap_source,
         "role": role,
         "skills": skills,
         "thin": thin,
@@ -1316,7 +1324,11 @@ def cmd_build(slugs):
         for e in errors:
             print("FAIL " + e, file=sys.stderr)
         return 1
-    cap = prompt_cap(fleet)
+    try:
+        cap, fleet_source = fleet_prompt_cap(fleet)
+    except ValueError as e:
+        print("FAIL fleet: %s" % e, file=sys.stderr)
+        return 1
     rc = 0
     for bot in selected_bots(fleet, slugs):
         slug = bot["slug"]
@@ -1326,7 +1338,7 @@ def cmd_build(slugs):
         if mode_of(fleet, bot) != "compiled":
             print("build-prompt: %s prompt_mode files (thin prompt unchanged)" % slug)
             continue
-        compiled = compile_bot(fleet, bot, items, cap)
+        compiled = compile_bot(fleet, bot, items, cap, fleet_source)
         if not compiled.get("ok"):
             rc = 1
             msg = compiled.get("reason") or "error"
@@ -1398,7 +1410,7 @@ def ordered_reasons(reasons):
     return [r for r in REASON_ORDER if r in reasons]
 
 
-def check_bot(fleet, bot, items, cap):
+def check_bot(fleet, bot, items, cap, fleet_source="default"):
     slug = bot["slug"]
     mode = mode_of(fleet, bot)
     entry = {"drift": None, "drift_reason": None, "prompt_mode": mode, "reasons": [], "slug": slug, "stale": False}
@@ -1408,7 +1420,7 @@ def check_bot(fleet, bot, items, cap):
     if mode != "compiled":
         entry["drift_reason"] = "opt-out"
         return entry
-    compiled = compile_bot(fleet, bot, items, cap)
+    compiled = compile_bot(fleet, bot, items, cap, fleet_source)
     reasons = []
     if not compiled.get("ok"):
         entry["reasons"] = [compiled.get("reason") or "bad-source"]
@@ -1470,10 +1482,16 @@ def cmd_check(as_json, slugs=None):
     report["lookup_only"] = lookup_only_from_repo()
     for w in warns:
         print("WARN " + w, file=sys.stderr)
-    cap = prompt_cap(fleet) if not errors else CAP_DEFAULT
+    fleet_source = "default"
+    try:
+        cap, fleet_source = fleet_prompt_cap(fleet)
+    except ValueError as e:
+        errors = list(errors) + ["fleet: %s" % e]
+        report["errors"] = errors
+        cap = None
     if not errors:
         for bot in selected_bots(fleet, slugs or []):
-            report["bots"].append(check_bot(fleet, bot, items, cap))
+            report["bots"].append(check_bot(fleet, bot, items, cap, fleet_source))
     report["ok"] = not errors and not any(b["stale"] or b["drift"] is True for b in report["bots"])
     summary = plain_summary(report)
     if as_json:
@@ -1577,7 +1595,11 @@ def cmd_changelog():
         for e in errors:
             print("FAIL " + e, file=sys.stderr)
         return 1
-    cap = prompt_cap(fleet)
+    try:
+        cap, fleet_source = fleet_prompt_cap(fleet)
+    except ValueError as e:
+        print("FAIL fleet: %s" % e, file=sys.stderr)
+        return 1
     version = kit_version()
     waiting, over, files, retired_slugs = [], [], [], []
     compiled = []
@@ -1589,7 +1611,7 @@ def cmd_changelog():
         if mode_of(fleet, bot) != "compiled":
             files.append(slug)
             continue
-        result = compile_bot(fleet, bot, items, cap)
+        result = compile_bot(fleet, bot, items, cap, fleet_source)
         result["bot"] = bot
         compiled.append(result)
         if not result.get("ok") or result.get("over_cap"):
@@ -1603,6 +1625,15 @@ def cmd_changelog():
     lines = []
     lines.append("One prompt update for kit %s. Approve this once for the whole fleet, not once per bot." % (version or "(unknown)"))
     lines.append("")
+    cap_rows = []
+    for result in compiled:
+        if not result.get("ok"):
+            continue
+        cap_rows.append("- %s: %d, %s" % (result["bot"]["slug"], result["cap"], result.get("cap_source") or "default"))
+    if cap_rows:
+        lines.append("Effective cap for each compiled bot:")
+        lines.extend(cap_rows)
+        lines.append("")
     if not waiting and not over:
         lines.append("No prompt update is waiting. Compiled prompts match what was marked deployed.")
     else:
@@ -1728,7 +1759,12 @@ def mark_deployed(slug):
         for e in errors:
             print("FAIL " + e, file=sys.stderr)
         return 1
-    compiled = compile_bot(fleet, bot, items, prompt_cap(fleet))
+    try:
+        cap, fleet_source = fleet_prompt_cap(fleet)
+    except ValueError as e:
+        print("FAIL fleet: %s" % e, file=sys.stderr)
+        return 1
+    compiled = compile_bot(fleet, bot, items, cap, fleet_source)
     if not compiled.get("ok"):
         print("FAIL %s: %s" % (slug, compiled.get("reason") or compiled.get("error")), file=sys.stderr)
         return 1

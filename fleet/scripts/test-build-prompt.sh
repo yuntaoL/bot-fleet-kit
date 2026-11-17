@@ -63,7 +63,7 @@ printf '# not a prompt input\n' > "$REPO/fleet/docs/NOTE.md"
 chmod +x "$REPO/fleet/scripts/build-prompt.sh" "$REPO/fleet/scripts/sync.sh" "$REPO/fleet/migrations/0.12.0.sh"
 
 python3 - "$REPO" <<'PY'
-import sys
+import os, sys
 sys.path.insert(0, sys.argv[1] + "/fleet/scripts")
 import prompt_build as pb
 cell = pb.pad_strip(" Keep the end   ")
@@ -236,7 +236,46 @@ for bad in (7999, 12001, 0, -1, True, False, 9500.0, "9500", None, []):
         elif bad > 12000:
             assert "above the ceiling" in text, text
         else:
-            assert "below the default" in text, (bad, text)
+            assert "below the floor" in text, (bad, text)
+os.environ.pop("BOT_FLEET_PROMPT_MAX", None)
+assert pb.fleet_prompt_cap({}) == (8000, "default")
+assert pb.fleet_prompt_cap({"prompt_max_chars": 10000}) == (10000, "fleet.json")
+assert pb.fleet_prompt_cap({"prompt_max_chars": 8000}) == (8000, "fleet.json")
+assert pb.resolve_bot_cap({}, 10000, "fleet.json") == (10000, "fleet.json")
+assert pb.resolve_bot_cap({}, 11000, "env") == (11000, "env")
+assert pb.resolve_bot_cap({"prompt_cap": 9000}, 10000, "fleet.json") == (9000, "bot.json override")
+os.environ["BOT_FLEET_PROMPT_MAX"] = "11000"
+assert pb.fleet_prompt_cap({"prompt_max_chars": 10000}) == (11000, "env")
+os.environ["BOT_FLEET_PROMPT_MAX"] = "8000"
+assert pb.fleet_prompt_cap({}) == (8000, "env")
+for bad in ("12001", "7999", "nope", "9000.0", "+9000"):
+    os.environ["BOT_FLEET_PROMPT_MAX"] = bad
+    try:
+        pb.fleet_prompt_cap({})
+        raise SystemExit("accepted env %r" % bad)
+    except ValueError as e:
+        text = str(e)
+        assert "Traceback" not in text
+        if bad == "12001":
+            assert "above the ceiling" in text, text
+        elif bad == "7999":
+            assert "below the floor" in text, text
+        else:
+            assert "must be an integer" in text, (bad, text)
+os.environ.pop("BOT_FLEET_PROMPT_MAX", None)
+for bad in (12001, 7999, "10000", True, False, 10000.0, None):
+    try:
+        pb.fleet_prompt_cap({"prompt_max_chars": bad})
+        raise SystemExit("accepted fleet cap %r" % (bad,))
+    except ValueError as e:
+        text = str(e)
+        assert "Traceback" not in text
+        if isinstance(bad, bool) or not isinstance(bad, int):
+            assert "must be an integer" in text, (bad, text)
+        elif bad > 12000:
+            assert "above the ceiling" in text, text
+        else:
+            assert "below the floor" in text, (bad, text)
 assert pb.parse_applies("none", "skill quay-note") == ["none"]
 assert pb.parse_applies("NONE", "skill quay-note") == ["none"]
 assert pb.parse_applies("None", "skill quay-note") == ["none"]
@@ -1093,7 +1132,7 @@ set_lane_cap 7999
 run "$BUILD" lane-marker
 [ "$RC" != 0 ] || fail "cap below the default was accepted"
 echo "$ERR" | grep -q 'FAIL lane-marker:' || fail "below-default was not a FAIL line: $ERR"
-echo "$ERR" | grep -q 'below the default 8000' || fail "below-default message: $ERR"
+echo "$ERR" | grep -q 'below the floor 8000' || fail "below-floor message: $ERR"
 echo "$ERR" | grep -q 'Traceback' && fail "below-default printed a traceback: $ERR" || true
 
 set_lane_cap str
@@ -1166,6 +1205,144 @@ echo "$ERR" | grep -q 'none must stand alone' || fail "mixed none did not name t
 echo "$ERR" | grep -q 'Traceback' && fail "mixed none printed a traceback: $ERR" || true
 cp "$T/skills-none.bak" "$REPO/local/shared/SHARED-SKILLS.md"
 pass "none stands alone and is lookup-only"
+
+# Cap source and floor. Precedence is bot.json, then env, then fleet.json, then default.
+# The floor is 8000 whatever the configured fleet or env cap is.
+unset BOT_FLEET_PROMPT_MAX
+cp "$REPO/local/fleet.json" "$T/fleet-before-sources.json"
+set_fleet_cap() {
+  python3 - "$REPO" "$1" <<'PY'
+import json, pathlib, sys
+root, raw = pathlib.Path(sys.argv[1]), sys.argv[2]
+path = root / "local/fleet.json"
+fleet = json.loads(path.read_text())
+if raw == "absent":
+    fleet.pop("prompt_max_chars", None)
+elif raw == "true":
+    fleet["prompt_max_chars"] = True
+elif raw == "float":
+    fleet["prompt_max_chars"] = 10000.0
+elif raw == "str":
+    fleet["prompt_max_chars"] = "10000"
+else:
+    fleet["prompt_max_chars"] = int(raw)
+path.write_text(json.dumps(fleet, indent=2) + "\n")
+PY
+}
+set_lane_cap absent
+set_fleet_cap 10000
+run "$BUILD" lane-marker
+[ "$RC" = 0 ] || fail "fleet.json cap 10000 should accept 9000 characters: $ERR"
+run "$BUILD" --check lane-marker
+echo "$OUT" | grep -q 'cap lane-marker: 10000, fleet.json' || fail "check missed fleet.json: $OUT"
+echo "$OUT" | grep 'cap lane-marker:' | grep -q 'default' && fail "fleet.json cap was called default: $OUT" || true
+set_fleet_cap 8000
+run "$BUILD" lane-marker
+[ "$RC" != 0 ] || fail "fleet.json 8000 should still be over cap for 9000 characters"
+echo "$ERR" | grep -q 'compiled prompt is 9000 characters (cap 8000, fleet.json)' || fail "fleet.json 8000 report: $ERR"
+echo "$ERR" | grep -q '(cap 8000, default)' && fail "number 8000 from fleet.json was called default: $ERR" || true
+set_fleet_cap 12001
+run "$BUILD" lane-marker
+[ "$RC" != 0 ] || fail "fleet.json above the ceiling was accepted"
+echo "$ERR" | grep -q 'FAIL fleet: prompt_max_chars 12001 is above the ceiling 12000' || fail "fleet ceiling line: $ERR"
+echo "$ERR" | grep -q 'Traceback' && fail "fleet ceiling printed a traceback: $ERR" || true
+run "$BUILD" --check lane-marker
+[ "$RC" != 0 ] || fail "check accepted a fleet cap above the ceiling"
+echo "$OUT" | grep -q 'FAIL fleet: prompt_max_chars 12001 is above the ceiling 12000' || fail "check fleet ceiling: $OUT"
+set_fleet_cap 7999
+run "$BUILD" lane-marker
+[ "$RC" != 0 ] || fail "fleet.json below the floor was accepted"
+echo "$ERR" | grep -q 'FAIL fleet: prompt_max_chars 7999 is below the floor 8000' || fail "fleet floor line: $ERR"
+echo "$ERR" | grep -q 'Traceback' && fail "fleet floor printed a traceback: $ERR" || true
+set_fleet_cap str
+run "$BUILD" lane-marker
+echo "$ERR" | grep -q 'FAIL fleet: prompt_max_chars must be an integer' || fail "fleet string cap: $ERR"
+echo "$ERR" | grep -q 'Traceback' && fail "fleet string cap printed a traceback: $ERR" || true
+set_fleet_cap true
+run "$BUILD" --check
+echo "$OUT" | grep -q 'FAIL fleet: prompt_max_chars must be an integer' || fail "fleet boolean cap: $OUT"
+set_fleet_cap float
+run "$BUILD" lane-marker
+echo "$ERR" | grep -q 'FAIL fleet: prompt_max_chars must be an integer' || fail "fleet float cap: $ERR"
+set_fleet_cap 10000
+run env BOT_FLEET_PROMPT_MAX=11000 "$BUILD" lane-marker
+[ "$RC" = 0 ] || fail "env cap 11000 should win and accept 9000 characters: $ERR"
+run env BOT_FLEET_PROMPT_MAX=11000 "$BUILD" --check lane-marker
+echo "$OUT" | grep -q 'cap lane-marker: 11000, env' || fail "check missed env: $OUT"
+echo "$OUT" | grep 'cap lane-marker:' | grep -q 'default' && fail "env cap was called default: $OUT" || true
+run env BOT_FLEET_PROMPT_MAX=8000 "$BUILD" lane-marker
+echo "$ERR" | grep -q 'compiled prompt is 9000 characters (cap 8000, env)' || fail "env 8000 report: $ERR"
+echo "$ERR" | grep -q '(cap 8000, default)' && fail "env 8000 was called default: $ERR" || true
+run env BOT_FLEET_PROMPT_MAX=12001 "$BUILD" lane-marker
+echo "$ERR" | grep -q 'FAIL fleet: BOT_FLEET_PROMPT_MAX 12001 is above the ceiling 12000' || fail "env ceiling line: $ERR"
+echo "$ERR" | grep -q 'Traceback' && fail "env ceiling printed a traceback: $ERR" || true
+run env BOT_FLEET_PROMPT_MAX=7999 "$BUILD" --check lane-marker
+echo "$OUT" | grep -q 'FAIL fleet: BOT_FLEET_PROMPT_MAX 7999 is below the floor 8000' || fail "env floor line: $OUT"
+run env BOT_FLEET_PROMPT_MAX=nope "$BUILD" lane-marker
+echo "$ERR" | grep -q 'FAIL fleet: BOT_FLEET_PROMPT_MAX must be an integer' || fail "env non-integer: $ERR"
+echo "$ERR" | grep -q 'Traceback' && fail "env non-integer printed a traceback: $ERR" || true
+run env BOT_FLEET_PROMPT_MAX=9000.0 "$BUILD" lane-marker
+echo "$ERR" | grep -q 'FAIL fleet: BOT_FLEET_PROMPT_MAX must be an integer' || fail "env float text: $ERR"
+# A bot override may sit below the configured fleet cap. The floor is still 8000.
+set_lane_cap 9000
+run env BOT_FLEET_PROMPT_MAX=11000 "$BUILD" lane-marker
+[ "$RC" = 0 ] || fail "bot override should beat env: $ERR"
+run env BOT_FLEET_PROMPT_MAX=11000 "$BUILD" --check lane-marker
+echo "$OUT" | grep -q 'cap lane-marker: 9000, bot.json override' || fail "bot override lost to env: $OUT"
+run "$BUILD" lane-marker
+[ "$RC" = 0 ] || fail "bot override 9000 should be allowed under fleet cap 10000: $ERR"
+run "$BUILD" --check lane-marker
+echo "$OUT" | grep -q 'cap lane-marker: 9000, bot.json override' || fail "bot override lost to fleet.json: $OUT"
+set_lane_cap 7999
+run "$BUILD" lane-marker
+echo "$ERR" | grep -q 'FAIL lane-marker:' || fail "bot cap below the floor was not a FAIL line: $ERR"
+echo "$ERR" | grep -q 'below the floor 8000' || fail "bot floor ignored the configured fleet cap: $ERR"
+echo "$ERR" | grep -q 'Traceback' && fail "bot floor printed a traceback: $ERR" || true
+# A cap change is a new input even when the prompt text stays the same.
+set_fleet_cap absent
+set_lane_cap 9500
+run "$BUILD" lane-marker
+[ "$RC" = 0 ] || fail "rebuild before cap-hash check: $ERR"
+cp "$REPO/local/prompts/lane-marker.md" "$T/lane-cap.md"
+python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["built"]["input_hash"])' "$REPO/local/prompts/lane-marker.manifest.json" > "$T/lane-hash-1"
+set_lane_cap 10000
+run "$BUILD" --check lane-marker
+echo "$OUT" | grep -q 'inputs-changed' || fail "cap change was not an input change: $OUT"
+echo "$OUT" | grep -q 'cap lane-marker: 10000, bot.json override' || fail "check missed the new cap: $OUT"
+cmp "$T/lane-cap.md" "$REPO/local/prompts/lane-marker.md" || fail "check rewrote the prompt on a cap change"
+run "$BUILD" --changelog
+echo "$OUT" | grep -q 'Effective cap for each compiled bot:' || fail "changelog missed the cap list: $OUT"
+echo "$OUT" | grep -q -- '- lane-marker: 10000, bot.json override' || fail "changelog missed lane-marker cap: $OUT"
+echo "$OUT" | grep -q -- '- harbor-clerk: 8000, default' || fail "changelog missed the default cap: $OUT"
+run "$BUILD" lane-marker
+[ "$RC" = 0 ] || fail "rebuild after cap change: $ERR"
+cmp "$T/lane-cap.md" "$REPO/local/prompts/lane-marker.md" || fail "cap change rewrote the prompt text"
+python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["built"]["input_hash"])' "$REPO/local/prompts/lane-marker.manifest.json" > "$T/lane-hash-2"
+cmp "$T/lane-hash-1" "$T/lane-hash-2" && fail "cap change left the input hash unchanged" || true
+python3 - "$REPO" <<'PY'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+import jsonschema
+schema = json.load(open(root / "fleet/schema/fleet.schema.json"))
+base = json.loads((root / "local/fleet.json").read_text())
+base.pop("prompt_max_chars", None)
+jsonschema.validate(base, schema)
+for good in (8000, 10000, 12000):
+    trial = dict(base)
+    trial["prompt_max_chars"] = good
+    jsonschema.validate(trial, schema)
+for bad in (7999, 12001, 1, "10000", True, None):
+    trial = dict(base)
+    trial["prompt_max_chars"] = bad
+    try:
+        jsonschema.validate(trial, schema)
+    except jsonschema.ValidationError:
+        continue
+    raise SystemExit("fleet schema accepted %r" % (bad,))
+print("fleet cap schema ok")
+PY
+cp "$T/fleet-before-sources.json" "$REPO/local/fleet.json"
+pass "cap source, floor, and hash"
 
 echo
 echo "SIZE harbor-clerk $(python3 -c 'print(len(open("'"$REPO"'/local/prompts/harbor-clerk.md").read()))')"

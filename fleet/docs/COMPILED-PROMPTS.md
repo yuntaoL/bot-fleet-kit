@@ -66,6 +66,7 @@ The rebuild hash covers:
 - the embedded action lines and skill lines
 - the bot's role and capabilities
 - the thin-prompt text (so the safe-pull sentence is part of the prompt)
+- the effective character cap and its source, so a cap change is a new build even when the prompt text is the same
 
 It does not cover docs, scripts, journals, state, holds, approvals, or the manifest's `built_at`. Editing the body of a rule above its digest does not change the prompt. Editing the digest does.
 
@@ -83,9 +84,18 @@ Compare is against `BOT_FLEET_PROMPT_BASE` when that commit exists, otherwise th
 
 ## Size
 
-The default cap is 8000 characters. Set `prompt_max_chars` in `local/fleet.json`, or `BOT_FLEET_PROMPT_MAX` for one run. The environment variable wins over `prompt_max_chars`. A bot may set `prompt_cap` in `bots/<slug>/bot.json`. That override is an owner decision. It must be an integer from 8000 through 12000. Absent, the bot uses the fleet cap (the environment variable, then `prompt_max_chars`, then 8000). A value that is not an integer, is below 8000, or is above 12000 fails that bot's build with a `FAIL <slug>:` line. The override is not clamped, and it does not silently lower the default. The over-cap report and `build-prompt.sh --check` name the effective cap and whether it came from the default or from the bot.json override.
+The floor and the default are 8000 characters. The ceiling is 12000. Every configured cap is an integer in that range. A value that is not an integer, is below 8000, or is above 12000 fails closed and is not clamped. The floor stays 8000 whatever the other settings are.
 
-Over the cap, the build fails and names three parts: fixed cost (thin prompt, routine, rule gists, footer), the bot's own action index, and skill plus preference rows. It says which part to cut and the exact overflow in characters. The strictly largest part is the one to cut. A tie does not tell the bot to trim ACTIONS.md unless that index is strictly the largest. Hard rules are not truncated. The fleet default stays 8000. The hard ceiling on a per-bot override is 12000.
+Precedence, highest first:
+
+1. `prompt_cap` in `bots/<slug>/bot.json`, when the key is present. Source: `bot.json override`. This is an owner decision for that bot. It may be lower than the fleet or env cap, down to 8000.
+2. `BOT_FLEET_PROMPT_MAX`, when it is set. Source: `env`. A bad value is `FAIL fleet:`.
+3. `prompt_max_chars` in `local/fleet.json`, when the key is present. Source: `fleet.json`. A bad value is `FAIL fleet:`.
+4. Otherwise 8000. Source: `default`.
+
+`--check` and the over-cap report name that source. They say `default` only when no other input set the cap. `--changelog` lists every compiled bot's effective cap and source. The cap and its source are part of the rebuild hash.
+
+Over the cap, the build fails and names three parts: fixed cost (thin prompt, routine, rule gists, footer), the bot's own action index, and skill plus preference rows. It says which part to cut and the exact overflow in characters. The strictly largest part is the one to cut. A tie does not tell the bot to trim ACTIONS.md unless that index is strictly the largest. Hard rules are not truncated.
 
 Measured on the fixture fleet in `fleet/scripts/test-build-prompt.sh` (fictional bots, kit 0.12.0):
 
@@ -115,7 +125,7 @@ Scripts never write the profile. `--mark-deployed` only updates the manifest, an
 
 `fleet/scripts/build-prompt.sh --check` prints a short summary. `--json` prints the same facts as JSON on stdout and the summary on stderr. The exit code is non-zero when any compiled bot is stale or the live profile text does not match.
 
-- **Stale** means the built snapshot differs from the deployed snapshot, or the hashed inputs differ from what was last built, or the prompt was never built or is over the cap. For each compiled bot the summary names the effective cap and its source (`default` or `bot.json override`). A shared-skills row with Applies to `none` is listed once as `lookup-only`.
+- **Stale** means the built snapshot differs from the deployed snapshot, or the hashed inputs differ from what was last built, or the prompt was never built or is over the cap. A cap change is an input change. For each compiled bot the summary names the effective cap and its source (`bot.json override`, `env`, `fleet.json`, or `default`). A shared-skills row with Applies to `none` is listed once as `lookup-only`.
 - **Drift** means `description` in `<profiles-dir>/<id>/profile.json` is not the deployed prompt. `<id>` is the bot's id in `local/fleet.json`. The default directory is `/home/box/agent-data/agents`. Set `BOT_FLEET_PROFILES_DIR` to point somewhere else. A missing directory is reported and is not a failure. A description that differs is a failure.
 
 File-mode bots are listed and are not stale. Retired bots are skipped.
