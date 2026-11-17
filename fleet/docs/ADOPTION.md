@@ -12,4 +12,4 @@ Prereqs on the shared bot machine: `git` ≥ 2.20, `gh` (`gh auth login`), `pyth
 6. **Worktrees:** `fleet/scripts/worktree.sh --all` → `~/bot-fleet-worktrees/<slug>` for every active bot, the manager included.
 7. **Give each bot its bootstrap prompt** (`templates/bot/instructions.md`, filled in with its worktree, slug and role).
 8. **Check:** `fleet/scripts/validate.sh` passes; CI is green.
-- **Owner name (0.8.0+):** set `owner_name` in `local/fleet.json` and render each bot's prompt with `fleet/scripts/render-prompt.sh <slug>` (from `templates/THIN-PROMPT.tmpl`); paste `bots/<slug>/THIN-PROMPT.md` instead of step 7's hand-filled prompt.
+- **Owner name (0.8.0+):** set `owner_name` in `local/fleet.json` and render each bot's prompt with `fleet/scripts/render-prompt.sh <slug>` (from `templates/THIN-PROMPT.tmpl`); paste `bots/<slug>/THIN-PROMPT.md` instead of step 7's hand-filled prompt. That is file mode. Compiled prompts are opt-in after 0.12.0 and are not part of adoption; see [COMPILED-PROMPTS.md](COMPILED-PROMPTS.md).

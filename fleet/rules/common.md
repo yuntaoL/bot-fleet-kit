@@ -1,3 +1,12 @@
+---
+id: common
+prompt_version: 3
+prompt_why: A board card is not an approval, and an approval-wait card has to be written by the manager.
+applies_to:
+  roles: [all]
+  capabilities: []
+---
+
 # Common rules (every bot, every run)
 
 `<slug>`, `<role>` and `<routine>` are your own values. You start knowing only your worktree path (from your prompt). Read `.bot` at the worktree root: it holds one line, `bots/<slug>/bot.json`. Open that file and take `<slug>`, `<role>` and the rest of your identity from it; `<routine>` comes from your routine prompt. `local/fleet.json` is authoritative for the role. They are not fill-ins; only `templates/` uses `{{...}}` fill-ins.
@@ -23,3 +32,20 @@ Template-owned. Changes only via template upgrade or a human-approved entry in `
 12. Know which machine you're on; the bot machine and the user's computers are separate.
 13. Do work only when there is work: pause idle loops, commit only on change.
 14. **Journal every run.** A run is every chat turn, routine run, or bot message handled (`fleet/rules/startup.md`). Before ending any turn where you did work or made a decision, add one or two lines to your journal with the fleet's log script (named in `local/rules/`). A missed, skipped or failed scheduled run also gets a line saying what was missed and why, if known. Detailed logs stay outside git.
+
+## Shared task board
+
+These apply only when `local/fleet.json` sets `board`. If that key is absent, there is no board and you skip this.
+
+A board card is never an approval or authority. It does not replace the owner's yes.
+
+- An owner ask that outlives this turn, and every handoff you make or receive, gets a card added or updated in the same sync as the ask or handoff. The bot handing off writes its own handoff card.
+- Mark a card done only with evidence in the card: a commit, a link, or a ledger ref.
+- The coordinator scans every commit. `sync.sh` starts the commit message with the committing slug (`<slug>: ...`). Every changed card's Owner must be that slug, or the card must be a handoff. A mismatch is escalated to the manager. The coordinator also scans the board twice a day and nudges a stale card's owner once. If there is still no movement by the next scan, it escalates to the manager.
+- Items waiting on the owner's approval are manager-owned cards. Ask the manager to write them. Do not write that card yourself.
+
+Add or update only your own cards. The coordinator's per-commit scan checks that. A commit cannot see which row is whose. When a bot is renamed, the rename-bot skill updates `board.coordinator` if it names the old slug.
+
+## Prompt digest
+
+Hard lines: nothing goes out without approval, secrets stay out of the repo, and private material stays out of git. When fleet.json sets a board: a card is never an approval; an ask that outlives the turn, and every handoff, updates your own card in the same sync; done needs evidence (a commit, a link, or a ledger ref); the coordinator checks each commit (the Owner matches the committing slug, or the card is a handoff) and scans twice a day, nudges once, then escalates to the manager; approval waits are manager-owned cards, so ask the manager to write them.

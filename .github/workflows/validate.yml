@@ -91,10 +91,13 @@ jobs:
           fi
           if [ -n "${GITHUB_OUTPUT:-}" ]; then
             printf 'mode=%s\n' "$MODE" >> "$GITHUB_OUTPUT"
+            printf 'base=%s\n' "$BASE" >> "$GITHUB_OUTPUT"
           fi
           echo "CI path mode: $MODE (base=$BASE head=$HEAD reason=$reason)"
           exit 0
       - run: fleet/scripts/validate.sh
+        env:
+          BOT_FLEET_PROMPT_BASE: ${{ steps.paths.outputs.base }}
       - run: fleet/scripts/audit.sh
       - name: classify-ci-paths tests
         run: fleet/scripts/test-classify-ci-paths.sh

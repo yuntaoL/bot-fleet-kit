@@ -15,6 +15,12 @@
   "owner_name": {"type": "string", "minLength": 1},
   "fleet_repo": {"type": "string"},
   "kit_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
-  "timezone": {"type": "string", "minLength": 1}
+  "timezone": {"type": "string", "minLength": 1},
+  "prompt_cap": {
+   "type": "integer",
+   "minimum": 8000,
+   "maximum": 12000,
+   "description": "Optional. An owner decision. Compiled-prompt character cap for this bot. Absent means the fleet cap (env, then fleet.json, then 8000). Must be an integer from 8000 through 12000. The floor is 8000 whatever the configured fleet cap is. A value below that floor or above the ceiling is refused and is not clamped."
+  }
  }
 }

@@ -1,0 +1,3 @@
+# One repo-relative kit path per line (fleet/rules/*.md or fleet/roles/*.md).
+# Listing a path here is the intentional removal of that prompt source.
+# A deleted digest-bearing file that is not listed fails build-prompt.sh --check-versions.

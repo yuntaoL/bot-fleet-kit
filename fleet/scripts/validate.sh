@@ -216,4 +216,7 @@ bash fleet/scripts/check-journal.sh 2>/dev/null | grep "^WARN" || true
 # shared index fail. Unindexed prefs/skills, stubs, and shared-index drift warn
 # unless BOT_FLEET_STRICT_ACTIONS=1. No fleet.json: the check skips.
 fleet/scripts/check-actions.sh || err=1
+# 0.12.0: a prompt digest change without a prompt_version bump fails. A version bump
+# that does not change the digest warns. Fleet-local rules have no kit version.
+python3 fleet/scripts/prompt_build.py --check-versions || err=1
 [ $err = 0 ] && echo "validate: OK ($MODE)" || { echo "validate: FAILED"; exit 1; }

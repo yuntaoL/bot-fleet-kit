@@ -1,3 +1,11 @@
+---
+id: routines
+prompt_version: 1
+applies_to:
+  roles: [all]
+  capabilities: []
+---
+
 # Routine runs (fleet-owned)
 
 `<slug>`, `<role>` and `<routine>` are your own values. You start knowing only your worktree path (from your prompt). Read `.bot` at the worktree root: it holds one line, `bots/<slug>/bot.json`. Open that file and take `<slug>`, `<role>` and the rest of your identity from it; `<routine>` comes from your routine prompt. `local/fleet.json` is authoritative for the role. They are not fill-ins; only `templates/` uses `{{...}}` fill-ins.
@@ -21,3 +29,7 @@ A routine whose steps are confidential works exactly like any other: same `.json
 - `bots/<slug>/.gitignore` contains `routines/private-*.steps.md` (copied from `templates/bot/.gitignore`), so the steps file never reaches git. Back it up outside git with the bot's other private material.
 - If the steps file is missing on a run, fail safe as in rule 8. Journal lines name only `routine:private-<name>.steps.md`, never the steps' content.
 - `validate.sh` and `confidential-scan.sh` fail if any `private-*.steps.md` file is ever tracked.
+
+## Prompt digest
+
+Routine runs follow the steps file, journal the routine marker, and leave the schedule alone.

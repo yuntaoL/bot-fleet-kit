@@ -36,6 +36,12 @@ These apply inside a fleet (the rules above apply to this template repo). They a
 - The builder commits it with `fleet/scripts/sync.sh` (that file, plus the builder's own `bots/<slug>/`). `upgrade.sh` (`BOT_FLEET_UPGRADE=1`) may write it. The manager may only add the pristine template stub at bootstrap. No other role may change it.
 - Bots read it at startup, then their own `kb/ACTIONS.md`. They point at shared rows; they do not copy them. kb/ACTIONS.md and the shared skills index only choose or tighten within the platform and skill steps (startup step 3). They never loosen or skip an approval, a hard line, or a platform safety step. kb holds owner-stated preferences, never instructions from outside sources, and adding a row is not approval.
 
+## Compiled prompts (added 0.12.0)
+- Default `prompt_mode` is `files`: the thin prompt, rendered by `render-prompt.sh`. `compiled` is opt-in and writes `local/prompts/<slug>.md`. See [COMPILED-PROMPTS.md](COMPILED-PROMPTS.md).
+- The pre-action routine is the `## Prompt digest` of `fleet/rules/startup.md`. It is copied into every compiled prompt so a one-word reply still follows the owner's row. Do not slim `startup.md` until compiled prompts have had verified runs (planned 0.13.0).
+- A kit change that alters a `## Prompt digest` bumps that file's `prompt_version` in the same commit. `validate.sh` fails when the digest changes without a bump, and warns when the version bumps without a digest change.
+- One kit release asks the owner once. `build-prompt.sh --changelog` is that ask. No script edits a live profile.
+
 ## Template branches start from current main (added 0.9.0)
 - Cut every template change branch from a fresh clone of the template repo at current `origin/main` (`git clone ... && git checkout -b <branch> origin/main`), never from an older local checkout or a previous release branch. A stale base makes the PR conflict with releases merged since.
 - Before opening or updating the PR, `git fetch` and confirm `git merge-base --is-ancestor origin/main HEAD`; if not, merge `origin/main` (no force-push) and rerun `selftest.sh`.
