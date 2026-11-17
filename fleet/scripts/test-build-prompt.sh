@@ -157,10 +157,29 @@ try:
     raise SystemExit("lone comma was dropped")
 except ValueError as e:
     assert "blank slot" in str(e) and "preference" in str(e), e
-sheet = pb.rewrite_rel_links("[sheet](../../fleet/skills/tide-table/SKILL.md)", "local/shared/SHARED-SKILLS.md")
-bell = pb.rewrite_rel_links("[bell](../../local/shared/skills/tide-table/SKILL.md)", "local/shared/SHARED-SKILLS.md")
-assert sheet == "[sheet](fleet/skills/tide-table/SKILL.md)", sheet
-assert bell == "[bell](local/shared/skills/tide-table/SKILL.md)", bell
+src = "local/shared/SHARED-SKILLS.md"
+def rw(text):
+    return pb.rewrite_rel_links(text, src)
+# markdown and backtick, for bare, ./, and ../
+assert rw("[n](neighbor.md)") == "[n](local/shared/neighbor.md)"
+assert rw("`neighbor.md`") == "`local/shared/neighbor.md`"
+assert rw("[n](sub/bare.md)") == "[n](local/shared/sub/bare.md)"
+assert rw("`sub/bare.md`") == "`local/shared/sub/bare.md`"
+assert rw("[n](./x.md)") == "[n](local/shared/x.md)"
+assert rw("`./x.md`") == "`local/shared/x.md`"
+assert rw("[n](../../fleet/skills/tide-table/SKILL.md)") == "[n](fleet/skills/tide-table/SKILL.md)"
+assert rw("`../../fleet/skills/tide-table/SKILL.md`") == "`fleet/skills/tide-table/SKILL.md`"
+assert rw("[n](./x.md#part)") == "[n](local/shared/x.md#part)"
+assert rw("[u](https://example.com/a/../b)") == "[u](https://example.com/a/../b)"
+assert rw("`https://example.com/a/../b`") == "`https://example.com/a/../b`"
+assert rw("[a](#section)") == "[a](#section)"
+assert rw("`#section`") == "`#section`"
+assert rw("[h](kb/prefs/calendar.md)") == "[h](kb/prefs/calendar.md)"
+try:
+    rw("[n](../../../outside.md)")
+    raise SystemExit("escaping link was rewritten")
+except ValueError as e:
+    assert "leaves the repo" in str(e), e
 assert "cut 1000 characters, or ask the owner about the cap" in pb.over_cap_report(
     "y", 9000, 8000, [("thin", "t" * 1000), ("shared-skills", "s" * 2000), ("action-index", "a" * 6000)], []
 )
@@ -459,6 +478,21 @@ arch | grep -q 'File crate notes in the pier ledger only.' && fail "worker local
 arch | grep -q 'The builder fast-forward is the only routine that updates every worktree.' || fail "builder local digest missing"
 arch | grep -q 'Example Owner' && fail "archivist prompt contains the owner name" || true
 pass "routine, calendar row, relevance, verbatim hard rule"
+
+# An escaping link is a FAIL line for that bot, not an uncaught traceback.
+cp "$REPO/local/shared/SHARED-SKILLS.md" "$T/skills.bak"
+cat >> "$REPO/local/shared/SHARED-SKILLS.md" << 'EOF'
+
+| Skill | When to use | Action types covered | Owner | Location | Applies to | Read first |
+|---|---|---|---|---|---|---|
+| escape-hatch | out | out | worker | `../../../outside.md` | all | |
+EOF
+run "$BUILD" harbor-clerk
+[ "$RC" != 0 ] || fail "escaping link was accepted"
+echo "$ERR" | grep -q 'FAIL harbor-clerk:' || fail "escaping link was not a FAIL line: $ERR"
+echo "$ERR" | grep -q 'Traceback' && fail "escaping link printed a traceback: $ERR" || true
+echo "$ERR" | grep -q 'leaves the repo' || fail "escaping link did not name the cause: $ERR"
+cp "$T/skills.bak" "$REPO/local/shared/SHARED-SKILLS.md"
 
 # Byte-identical rebuild, including built_at.
 cp "$REPO/local/prompts/harbor-clerk.md" "$T/clerk.md"

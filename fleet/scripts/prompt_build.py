@@ -612,23 +612,46 @@ def parse_applies(cell, what):
     return out
 
 
-def rewrite_rel_links(text, source="local/shared/SHARED-SKILLS.md"):
-    """Rewrite a source-relative link to a repo-root path.
+_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+# Already a worktree-root pointer. kb/ is the bot's own index convention, not a
+# path relative to the file that mentions it.
+_ROOT_PREFIXES = ("fleet/", "local/", "bots/", "templates/", "kb/")
 
-    Bots resolve paths from the worktree root, not from local/prompts. A link such as
-    ../../fleet/skills/x/SKILL.md in local/shared/SHARED-SKILLS.md becomes
-    fleet/skills/x/SKILL.md. The source file's directory is the base. A path that
-    would leave the repo fails. Links with no .. are left as written.
+
+def _looks_like_path(path):
+    """A backtick is a path when it has a slash, a dot-segment, or a file extension."""
+    path = (path or "").split("#", 1)[0]
+    if not path or path.startswith("#"):
+        return False
+    if path.startswith("./") or path.startswith("../") or path.startswith("."):
+        return True
+    if "/" in path:
+        return True
+    return re.search(r"\.[A-Za-z0-9]+$", path) is not None
+
+
+def rewrite_rel_links(text, source="local/shared/SHARED-SKILLS.md"):
+    """Rewrite every relative target to a repo-root path.
+
+    Bots open paths from the worktree root. bare, ./, and ../ targets in markdown
+    links and backticks are resolved from the source file's directory. A scheme URL
+    and a pure #anchor are left alone. A fragment stays on the resolved path. A
+    path that leaves the repo fails. Paths that already start at fleet/, local/,
+    bots/, templates/, or kb/ are already root pointers and stay as written.
     """
     base = os.path.dirname(source) or "."
 
     def one(target):
-        path, frag = target, ""
-        if "#" in path:
-            path, frag = path.split("#", 1)
+        raw = target.strip()
+        if not raw or raw.startswith("#") or _SCHEME.match(raw):
+            return target
+        path, frag = raw, ""
+        if "#" in raw:
+            path, frag = raw.split("#", 1)
             frag = "#" + frag
-        parts = path.split("/")
-        if ".." not in parts and not path.startswith("./"):
+        if not path or path.startswith("#"):
+            return target
+        if path.startswith("/") or any(path.startswith(p) for p in _ROOT_PREFIXES):
             return target
         norm = os.path.normpath(os.path.join(base, path)).replace("\\", "/")
         if norm.startswith("../") or norm == ".." or os.path.isabs(norm):
@@ -642,7 +665,7 @@ def rewrite_rel_links(text, source="local/shared/SHARED-SKILLS.md"):
 
     def tick_repl(m):
         inner = m.group(1)
-        if ".." not in inner.split("/"):
+        if not _looks_like_path(inner):
             return m.group(0)
         return "`" + one(inner) + "`"
 
@@ -935,9 +958,9 @@ def compile_bot(fleet, bot, items, cap):
             check_applies(pref["applies"], slugs, "preference %r" % (pref["action"] or ""))
         picked, skill_warns = relevant_skills(actions_text, skill_table, role)
         kept_prefs = relevant_prefs(pref_rows, actions_text, slug, role, picked)
+        skills = skill_lines(picked) + [pref_line(p) for p in kept_prefs]
     except ValueError as e:
         return {"ok": False, "reason": "bad-source", "error": str(e)}
-    skills = skill_lines(picked) + [pref_line(p) for p in kept_prefs]
     prompt, sections = assemble(thin, startup["digest"], gists, actions, skills)
     payload = {
         "actions": actions,

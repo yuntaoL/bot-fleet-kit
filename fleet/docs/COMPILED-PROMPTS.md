@@ -47,7 +47,7 @@ Shared skills (`local/shared/SHARED-SKILLS.md`), for each bot:
 - Also include a skill row when the Applies to cell lists the bot's role, or `all`.
 - An empty Applies to cell is reference-only. It is not given to every bot.
 - The skill line carries the Read-first column's backticked paths and link targets. The long "when to use" cell is not copied.
-- An owner-preference row is not copied to every bot. An Applies to cell lists slugs, roles, or `all`. An empty cell is included only when its action, or a skill it names, matches that bot's ACTIONS or a skill row already chosen. A `../` link in a skill or preference row is resolved from that source file and written as a repo-root path, such as `fleet/skills/x/SKILL.md`. Bots open paths from the worktree root.
+- An owner-preference row is not copied to every bot. An Applies to cell lists slugs, roles, or `all`. An empty cell is included only when its action, or a skill it names, matches that bot's ACTIONS or a skill row already chosen. A relative link (`neighbor.md`, `./x.md`, `../x.md`, `sub/bare.md`), in a markdown link or in backticks, is resolved from the source file and written as a repo-root path. A scheme URL and a pure `#anchor` stay as written. A path that leaves the repo fails that bot's build. Paths that already start at `fleet/`, `local/`, `bots/`, `templates/`, or `kb/` are left as written.
 
 Rule digests (`fleet/rules/*.md`, `fleet/roles/*.md`, `local/rules/*.md`):
 
