@@ -17,7 +17,7 @@ git config --global user.email test@example.invalid
 git config --global commit.gpgsign false
 
 # Source shape.
-[ "$(cat "$SRC/fleet/VERSION")" = "0.12.0" ] || fail "VERSION"
+[ "$(cat "$SRC/fleet/VERSION")" = "0.12.1" ] || fail "VERSION"
 grep -q 'fleet/scripts/pull.sh' "$SRC/templates/THIN-PROMPT.tmpl" || fail "thin prompt missing safe pull"
 grep -q 'Not at the start of every turn' "$SRC/templates/THIN-PROMPT.tmpl" || fail "thin prompt restored a per-run pull"
 grep -q 'git pull' "$SRC/templates/THIN-PROMPT.tmpl" && fail "thin prompt teaches bare git pull" || true
