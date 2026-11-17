@@ -1,3 +1,3 @@
-# expect: full
+# expect: skip-selftest
 # case: kb-non-md
 M	bots/dr-eggbot/kb/notes.txt

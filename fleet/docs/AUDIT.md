@@ -3,7 +3,7 @@
 Goal: the fleet's files still say what we mean, match what the bots actually do, and hold nothing they shouldn't. Run `fleet/scripts/audit.sh` for the mechanical part, then use judgment for the rest. Fix what's yours (local/), ask bots by message to fix their own folders, and open a PR or issue on the template repo for template changes.
 
 ## Checklist
-1. **CI and validate:** latest CI run green; `validate.sh` passes.
+1. **CI and validate:** `validate.sh` passes. Pull requests always run the `validate` workflow. A push that only touches `bots/` does not start Actions; the 2-hour schedule on `main` runs `validate.sh` and `audit.sh`, and the 09:00 UTC schedule runs `selftest.sh` as well. A red run is still a red run.
 2. **Rules style** (docs/WRITING_RULES.md): rules that enumerate items instead of stating the principle; rules without a why; long or repetitive rule files.
 3. **Consistency:** contradictions between layers; any lower layer looser than a higher one (a bot rule can only tighten); overrides missing date/approver/approval text.
 4. **Stale state:** `state.json` `updatedAt` old; open items past due, waiting on nobody, or already done.

@@ -7,7 +7,7 @@ bot-fleet/
 ├── README.md                     manager   fleet landing page (GitHub only renders a root README)
 ├── LICENSE                       manager
 ├── .gitignore                    manager   root ignore rules (Python bytecode)
-├── .github/workflows/            template  CI: validate.sh (GitHub requires this path)
+├── .github/workflows/            template  CI: validate on pull requests and on pushes outside bots/; selftest only when a kit path changed; 2-hour validate and a 09:00 UTC selftest on main
 ├── examples/                     template  template repo ONLY (not copied to fleets); add-example.sh fetches from here
 ├── fleet/                        template  shared, upstream-owned, used as-is; changed ONLY by fleet/scripts/upgrade.sh
 │   ├── VERSION  OWNERS.json      version; path globs → owner class (the single permission source)

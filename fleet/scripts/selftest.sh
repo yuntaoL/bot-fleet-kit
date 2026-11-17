@@ -12,10 +12,12 @@ ok(){ echo "PASS $*"; }; die(){ echo "FAIL $*" >&2; exit 1; }
 # 0.10.8: staged configuration JSON is schema-checked before commit (sync.sh and the pre-commit hook).
 "$SRC/fleet/scripts/test-staged-config.sh" || die "staged-config"
 ok "staged config schema (invalid routine, bot.json, fleet.json blocked before commit and push)"
-# 0.10.6: the docs-only CI skip is fail-closed. These tests are fast; the scratch-fleet
-# run below is the part CI skips when every changed path is an inert journal or kb markdown file.
+# CI skips selftest unless a kit path changed. These tests are fast; the scratch-fleet
+# run below is the part CI skips when every changed path is under bots/ or local/.
 "$SRC/fleet/scripts/test-classify-ci-paths.sh" || die "classify-ci-paths"
-ok "classify-ci-paths fail-closed (journal/kb allowlist)"
+ok "classify-ci-paths fail-closed (selftest only when kit paths change)"
+"$SRC/fleet/scripts/test-sync-gate.sh" || die "sync-gate"
+ok "sync.sh pre-push validate gate (own path blocks, other bot warns, SYNC_SKIP_GATE=1 escapes)"
 # 0.10.9: do not teach a per-run pull. pull.sh and sync.sh stay; the builder fast-forwards worktrees.
 # 0.12.0: THIN-PROMPT.tmpl names pull.sh as the safe update, and still forbids a per-run pull.
 for f in templates/ROUTINE-PROMPT.tmpl templates/bot/instructions.md fleet/rules/startup.md fleet/rules/routines.md examples/tracker/instructions.md examples/notes-keeper/instructions.md fleet/docs/AGENT_GUIDE.md; do

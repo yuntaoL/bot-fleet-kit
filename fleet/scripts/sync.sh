@@ -20,10 +20,110 @@
 # 0.10.8: before commit, staged bots/<slug>/routines/*.json, bots/<slug>/bot.json and local/fleet.json are
 # schema-checked from index blobs (the instance and fleet/schema/*.schema.json are one snapshot).
 # A symlink, gitlink, or other non-regular mode is refused. A failure refuses the commit and the push.
+# Pre-push gate: when fleet/scripts/validate.sh exists, it runs after those checks and before commit.
+# That is the check CI's validate step runs. audit.sh's read-only report does not fail CI and reads
+# every tracked file, so it is not part of the gate. A failure on a path this bot owns or staged
+# refuses the commit and the push. A failure that is only another bot's bots/<other>/ file warns
+# and still pushes. A failure with no path refuses the push. SYNC_SKIP_GATE=1 skips the gate and
+# prints a loud warning. A tree with no validate.sh (a unit fixture that copied only sync.sh) does
+# not run the gate.
 # 0.10.2: serialized per worktree by flock on <git-dir>/fleet-sync.lock (shared with pull.sh); always fetches origin main
 # explicitly; a rejected push is retried with backoff and jitter.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
+
+# Defined before use. See the header for when this refuses a push.
+pre_push_gate() {
+  if [ "${SYNC_SKIP_GATE:-}" = "1" ]; then
+    echo "sync: WARNING: SYNC_SKIP_GATE=1 is set. Skipping the pre-push validate.sh gate. This push was NOT checked by validate.sh." >&2
+    return 0
+  fi
+  if [ ! -f fleet/scripts/validate.sh ]; then
+    return 0
+  fi
+  local out rc verdict staged
+  out="$(mktemp)"
+  set +e
+  bash fleet/scripts/validate.sh >"$out" 2>&1
+  rc=$?
+  set -e
+  if [ "$rc" -eq 0 ]; then
+    rm -f "$out"
+    return 0
+  fi
+  staged="$(git diff --cached --name-only || true)"
+  verdict="$(STAGED_PATHS="$staged" python3 - "$out" "$me" << 'PY'
+import os, re, sys
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+me = sys.argv[2]
+staged = [p for p in os.environ.get("STAGED_PATHS", "").split("\n") if p]
+path_re = re.compile(
+    r"(?<![A-Za-z0-9_./-])((?:bots|local|fleet|templates|examples|\.github)/[A-Za-z0-9_./@+-]+|README\.md|LICENSE)"
+)
+slug_re = re.compile(r"^([a-z0-9-]+):\s")
+
+def hit(path):
+    base = path.rstrip("/")
+    for s in staged:
+        sb = s.rstrip("/")
+        if path == s or base == sb or path.startswith(sb + "/") or s.startswith(base + "/"):
+            return True
+    return False
+
+def other_bot(path):
+    # bots/<other> and bots/<other>/... are another bot. A missing folder is
+    # "bots/<slug>" with no extra slash; that is still the other bot's tree.
+    m = re.match(r"^bots/([^/]+)(?:/|$)", path)
+    return bool(m and m.group(1) != me)
+
+fails = []
+for ln in text.splitlines():
+    if ln.startswith("FAIL "):
+        fails.append(ln[5:].strip())
+if not fails:
+    print("unattributed")
+    raise SystemExit
+other = False
+for ln in fails:
+    paths = [p.rstrip(".,);") for p in path_re.findall(ln)]
+    if paths:
+        # The subject is the first path. Later paths are hints, such as
+        # "missing bots/<other>/bot.json (fleet/scripts/bot-json.sh <other>)".
+        p = paths[0]
+        if hit(p) or not other_bot(p):
+            print("owned")
+            raise SystemExit
+        other = True
+        continue
+    m = slug_re.match(ln)
+    if m and os.path.isdir(os.path.join("bots", m.group(1))):
+        slug = m.group(1)
+        if slug == me or hit("bots/%s" % slug):
+            print("owned")
+            raise SystemExit
+        other = True
+        continue
+    print("unattributed")
+    raise SystemExit
+print("other-bot" if other else "unattributed")
+PY
+)" || verdict="unattributed"
+  if [ "$verdict" = "other-bot" ]; then
+    echo "sync: WARNING: validate.sh failed only in another bot's files. Pushing anyway so one broken bot does not wedge the fleet." >&2
+    cat "$out" >&2
+    rm -f "$out"
+    return 0
+  fi
+  echo "sync: refusing commit and push; validate.sh failed" >&2
+  cat "$out" >&2
+  if [ "$verdict" = "unattributed" ]; then
+    echo "sync: the failure could not be attributed to a path. Set SYNC_SKIP_GATE=1 to push anyway; that prints a loud warning and skips this gate." >&2
+  else
+    echo "sync: the failure concerns paths this bot owns or staged ($me). Fix those files, or set SYNC_SKIP_GATE=1 to push anyway (loud warning, gate skipped)." >&2
+  fi
+  rm -f "$out"
+  return 1
+}
 msg="${1:?usage: sync.sh \"message\" [paths...]}"; shift || true
 me="${BOT_NAME:-$(git config --get fleet.bot || true)}"; role="${BOT_ROLE:-$(git config --get fleet.role || true)}"
 [ -n "$me" ] || { echo "sync: no identity; run inside your worktree or set BOT_NAME/BOT_ROLE" >&2; exit 1; }
@@ -108,6 +208,7 @@ fi
 if git diff --cached --quiet; then
   echo "sync: no change"; git fetch -q origin main || true; git rebase -q origin/main 2>/dev/null || git rebase --abort 2>/dev/null || true; exit 0
 fi
+pre_push_gate
 BOT_NAME="$me" BOT_ROLE="$role" git commit -qm "$me: $msg"
 for i in 1 2 3 4 5 6; do
   if ! git fetch -q origin main; then sleep $((i*2 + RANDOM % 3)); continue; fi
