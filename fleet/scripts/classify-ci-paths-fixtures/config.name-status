@@ -1,4 +1,4 @@
-# expect: full
+# expect: skip-selftest
 # case: config
 M	local/fleet.json
 M	bots/dr-eggbot/bot.json

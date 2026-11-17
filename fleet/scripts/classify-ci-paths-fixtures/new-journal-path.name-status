@@ -1,3 +1,3 @@
-# expect: docs-only
+# expect: skip-selftest
 # case: new-journal-path
 A	bots/dr-eggbot/journal/2026-11-09.md

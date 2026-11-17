@@ -1,0 +1,3 @@
+# expect: skip-selftest
+# case: rename-bots-to-local
+R100	bots/ada/notes.md	local/notes.md

@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-# Classify a git name-status list as "docs-only" or "full" (fail-closed).
+# Classify a git name-status list as "skip-selftest" or "full" (fail-closed).
 #
-# docs-only: every change is an add or modify of an explicit inert path, or a
-# rename whose old AND new paths are both inert:
-#   bots/<slug>/journal/YYYY-MM-DD.md
-#   bots/<slug>/kb/**/*.md
-# slug is [a-z0-9-]+. No glob fallback: unknown paths do not match.
+# skip-selftest: selftest.sh does not need to run. Every change is an add or
+# modify under bots/ or local/, or a rename whose old AND new paths are both
+# under those trees. Slug shape is not re-checked: the proof is that selftest
+# does not read those trees, not that the path looks like a journal file.
 #
-# full: anything else. Deletions, copies, type changes, renames that touch a
-# non-inert path, unparseable lines, empty diffs, zero or non-hex SHAs, git
-# failures, conflicting arguments, and classifier errors are full.
+# full: a kit input changed, or the diff is not proven safe. Kit inputs are
+# the checkout paths selftest.sh actually reads (evidence below):
+#   fleet/**  templates/**  .github/**  examples/**
+#   README.md  LICENSE
+# Also full: any other path (.gitignore, a new root file, a quoted path);
+# deletions, copies, and type changes (even under bots/ or local/); a rename
+# that touches a kit or unknown path; unparseable lines; empty diffs; zero or
+# non-hex SHAs; git failures; conflicting arguments; classifier errors.
 # Also full: a NUL byte anywhere in the input; a path that is not printable
 # ASCII (Unicode slugs, controls, DEL); a git-quoted path (tab, newline, or
 # non-ASCII as C escapes); a tab that adds a field; a record split only by
@@ -20,16 +24,25 @@
 # runs the base commit's blob of this file, and records full without asking
 # if this file, its tests, or .github/workflows/validate.yml changed, or if
 # that blob is missing or not a regular file. Tests of this file still run
-# from the commit under test.
+# from the commit under test. The workflow still treats a legacy base blob's
+# token "docs-only" as skip-selftest. This script no longer prints that token.
 #
-# Why selftest may be skipped: selftest.sh does not read bots/<slug>/journal
-# or bots/<slug>/kb from the checkout under test. It builds a scratch fleet
-# from fleet/, templates/, .github/, README.md, LICENSE and examples/.
-# validate.sh reads bots/*/kb/**/*.md (front matter, INDEX links) and calls
-# check-journal.sh. audit.sh greps tracked files outside fleet/ and .github/
-# (that includes journal and kb) and calls check-journal.sh. Those always run.
+# Evidence (read of selftest.sh and every script it executes, 2026-11-17):
+# selftest.sh builds the scratch template with
+#   tar -cf - fleet templates .github README.md LICENSE examples
+# (examples only when that directory exists). test-journal-gap-midnight.sh
+# tars the same six inputs. Direct $SRC reads in selftest.sh and the test
+# scripts it runs (test-staged-config, test-classify-ci-paths,
+# test-check-actions, test-build-prompt, test-board, test-journal-gap-midnight,
+# and test-sync-gate) are only under fleet/, templates/, and examples/.
+# Copies during the migration section are fleet/migrations/0.10.0.sh,
+# fleet/scripts/rewrite-paths.py, and fleet/scripts/compat.sh.
+# There is no $SRC/bots/ and no $SRC/local/ read. After the tar, bots/ and
+# local/ exist only inside the temp fleet that bootstrap creates.
+# validate.sh and audit.sh do read bots/ and local/ from the checkout, and
+# they still run whenever the workflow runs.
 #
-# Prints exactly one token to stdout: docs-only | full
+# Prints exactly one token to stdout: skip-selftest | full
 # Writes the reason to stderr. Exit 0 on classification results, including
 # fail-closed results, so a workflow step can keep going and run selftest.
 # Exit non-zero only when the interpreter itself fails to start; callers must
@@ -56,14 +69,11 @@ done
 python3 - "$@" << 'PY'
 import os, re, subprocess, sys
 
-DOCS_ONLY = "docs-only"
+SKIP = "skip-selftest"
 FULL = "full"
 
-# Explicit allowlist. Anchored. New unknown paths do not match.
-INERT = (
-    re.compile(r"^bots/[a-z0-9-]+/journal/[0-9]{4}-[0-9]{2}-[0-9]{2}\.md$"),
-    re.compile(r"^bots/[a-z0-9-]+/kb/.+\.md$"),
-)
+# Proven unread by selftest.sh. Anything else, including kit inputs, is full.
+SAFE_PREFIXES = ("bots/", "local/")
 RENAME = re.compile(r"^R[0-9]*$")
 COPY = re.compile(r"^C[0-9]*$")
 ZERO_SHA = re.compile(r"^0+$")
@@ -75,20 +85,22 @@ def emit(mode, reason):
     sys.exit(0)
 
 # Fixture files carry only these headers. Any other '#' line can hide a path.
-FIXTURE_HEADER = re.compile(r"^# (?:expect: (?:docs-only|full)|case: [A-Za-z0-9._-]+)$")
+FIXTURE_HEADER = re.compile(
+    r"^# (?:expect: (?:skip-selftest|docs-only|full)|case: [A-Za-z0-9._-]+)$"
+)
 
-def is_inert(path):
+def is_safe(path):
     if not path or path.startswith("/") or path.startswith("./") or "\\" in path:
         return False
     # Printable ASCII only. Do not unquote git's C-quoted paths and do not
-    # treat Unicode, controls, DEL, or NUL as the allowlist. A kb markdown
-    # file whose name is non-ASCII is not proven to be the same shape.
+    # treat Unicode, controls, DEL, or NUL as proven-unread. A non-ASCII
+    # bots/ path is not the same shape the evidence was checked against.
     if any(ord(ch) < 0x20 or ord(ch) > 0x7e for ch in path):
         return False
     parts = path.split("/")
     if any(p in ("", ".", "..") for p in parts):
         return False
-    return any(rx.fullmatch(path) for rx in INERT)
+    return path.startswith(SAFE_PREFIXES)
 
 def classify_lines(text):
     # A NUL is not a git path byte. Parsing past it could drop a second path.
@@ -121,9 +133,9 @@ def classify_lines(text):
             if len(paths) != 2 or not paths[0] or not paths[1]:
                 return FULL, f"rename missing paths (fail-closed): {ln!r}"
             old, new = paths
-            if is_inert(old) and is_inert(new):
+            if is_safe(old) and is_safe(new):
                 continue
-            return FULL, f"rename is not inert-to-inert (fail-closed): {old} -> {new}"
+            return FULL, f"rename is not safe-to-safe (fail-closed): {old} -> {new}"
         if status == "D":
             if len(paths) != 1:
                 return FULL, f"deletion missing path (fail-closed): {ln!r}"
@@ -132,11 +144,11 @@ def classify_lines(text):
             if len(paths) != 1:
                 return FULL, f"add/modify has extra fields (fail-closed): {ln!r}"
             path = paths[0]
-            if not is_inert(path):
-                return FULL, f"path is not on the inert allowlist (fail-closed): {path}"
+            if not is_safe(path):
+                return FULL, f"path is not a proven non-input (fail-closed): {path}"
             continue
         return FULL, f"unknown name-status {status!r} (fail-closed)"
-    return DOCS_ONLY, "all paths are inert allowlist adds/modifies (or inert-to-inert renames)"
+    return SKIP, "all paths are adds/modifies under bots/ or local/ (or safe-to-safe renames)"
 
 def git_diff(base, head):
     if not base or not head or ZERO_SHA.fullmatch(base) or ZERO_SHA.fullmatch(head):

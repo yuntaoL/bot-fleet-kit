@@ -143,6 +143,10 @@ The git side of both phases is tested end to end by `fleet/scripts/selftest.sh` 
 | Required-role checks fail by default (warn in v0.8) | 🧪 next |
 | Shared skills, two-level logs, daily fast-forward | 🧪 proposed |
 
+## Continuous integration
+
+The `validate` job runs on every pull request, on a manual run, and on a push that changes anything outside `bots/`. A push that only touches `bots/` does not start it. On `main`, a schedule every two hours runs `validate.sh` and `audit.sh` without the long self-test. A schedule at 09:00 UTC runs the self-test as well. The self-test runs on a push or pull request only when the diff touches kit code (`fleet/`, `templates/`, `.github/`, `examples/`, `README.md`, or `LICENSE`). Changes under `bots/` or `local/` do not. Before a bot pushes, `fleet/scripts/sync.sh` runs `validate.sh`. A failure in that bot's own files blocks the push. A failure that is only another bot's files warns and still pushes. `SYNC_SKIP_GATE=1` skips that local check and says so.
+
 ## Contributing
 
 Guidance changes go upstream first: open a PR against this repo. Each change bumps `fleet/VERSION`, adds a [CHANGELOG](fleet/docs/CHANGELOG.md) entry with migration notes and, if user data moves, an idempotent `fleet/migrations/X.Y.Z.sh`. Run `fleet/scripts/selftest.sh` before opening a PR. See [CONTRIBUTING](fleet/docs/CONTRIBUTING.md) and [VERSIONING](fleet/docs/VERSIONING.md). Keep it generic: no personal data in PRs.

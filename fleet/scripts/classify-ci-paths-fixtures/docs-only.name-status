@@ -1,4 +1,4 @@
-# expect: docs-only
+# expect: skip-selftest
 # case: docs-only
 M	bots/dr-eggbot/kb/audits/2026-11-06-note.md
 M	bots/dr-eggbot/kb/INDEX.md

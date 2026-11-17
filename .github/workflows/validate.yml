@@ -1,23 +1,51 @@
 # Job name "validate" is unchanged so a required check of that name still reports.
-# classify-ci-paths.sh is fail-closed: unknown, error, empty, deletion, copy,
-# type change, zero SHA, or any path outside the allowlist => mode full.
-# docs-only still runs validate.sh and audit.sh; only selftest.sh is skipped.
-# Allowlist (add/modify, or a rename whose old and new paths both match):
-#   bots/<slug>/journal/YYYY-MM-DD.md
-#   bots/<slug>/kb/**/*.md
-# Not inert: bots/<slug>/state.json, rules, scripts, workflows, and any other path.
-# selftest.sh does not read those paths from the checkout (it builds a scratch
-# fleet). validate.sh and audit.sh do, and they always run.
-# Path filters are not used. A classifier failure still records mode full.
+# classify-ci-paths.sh is fail-closed: unknown, unparseable, deletion, copy,
+# type change, zero SHA, classifier error, or any path that is not a proven
+# non-input => mode full.
+# skip-selftest still runs validate.sh, audit.sh, and the classifier tests.
+# Only selftest.sh is skipped, and only when every change is an add or modify
+# under bots/ or local/, or a rename whose old and new paths are both there.
+# A legacy base classifier that still prints docs-only is treated as
+# skip-selftest. This workflow no longer asks the worktree classifier.
+# bots/<slug>/state.json is a bots/ path: it skips selftest. Kit inputs do
+# not: fleet/, templates/, .github/, examples/, README.md, LICENSE.
+# selftest.sh reads those kit paths and does not read bots/ or local/ from
+# the checkout (it builds a scratch fleet). validate.sh and audit.sh do read
+# bots/ and local/, and they run whenever this workflow runs.
+#
+# Push path filter: paths-ignore bots/**. A push that touches only bots/ does
+# not start this workflow. A push that also touches any path outside bots/
+# still runs. pull_request is unfiltered, so every pull request runs this
+# workflow (selftest still follows the classifier).
+# schedule on main: every 2 hours (cron 0 */2, even hours only) runs
+# validate.sh and audit.sh and skips selftest. 09:00 UTC always runs
+# selftest. The two crons do not overlap. workflow_dispatch always runs
+# selftest. Push and pull_request share concurrency group validate-<ref> and
+# cancel in progress. A scheduled run uses a group that includes the cron, so
+# a 2-hourly run does not cancel the nightly.
 # The skip decision runs the base commit's blob of classify-ci-paths.sh, never
 # the worktree copy. If that blob is missing or not a regular file, or if the
 # classifier, its tests, or this workflow changed, the mode is full.
 name: validate
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - 'bots/**'
+  pull_request:
+  schedule:
+    # Even hours. 09:00 UTC is the nightly full run, not this cron.
+    - cron: '0 */2 * * *'
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.event_name == 'schedule' && format('validate-{0}-schedule-{1}', github.ref, github.event.schedule) || format('validate-{0}', github.ref) }}
+  cancel-in-progress: true
 jobs:
   validate:
     name: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ github.event_name != 'schedule' || github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,7 +57,9 @@ jobs:
         id: paths
         env:
           # Same SHAs as before: pull_request uses the base SHA, push uses
-          # github.event.before. The shell reads these names so the contract
+          # github.event.before. Schedule and workflow_dispatch have no before
+          # SHA; the shell then records full. The 2-hourly selftest skip does
+          # not follow that mode. The shell reads these names so the contract
           # test can run this script without the GitHub expression syntax.
           CLASSIFY_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           CLASSIFY_HEAD_SHA: ${{ github.sha }}
@@ -79,11 +109,14 @@ jobs:
                 else
                   MODE="$(bash "$blob" --base "$BASE" --head "$HEAD")"
                   rc=$?
-                  if [ "$rc" -ne 0 ] || [ "$MODE" != "docs-only" ]; then
+                  if [ "$rc" -ne 0 ] || { [ "$MODE" != "skip-selftest" ] && [ "$MODE" != "docs-only" ]; }; then
                     MODE=full
-                    reason="base classifier did not report docs-only (fail-closed, exit=${rc})"
+                    reason="base classifier did not report skip-selftest (fail-closed, exit=${rc})"
+                  elif [ "$MODE" = "docs-only" ]; then
+                    MODE=skip-selftest
+                    reason="base classifier reported docs-only (legacy skip token)"
                   else
-                    reason="base classifier reported docs-only"
+                    reason="base classifier reported skip-selftest"
                   fi
                 fi
               fi
@@ -102,5 +135,8 @@ jobs:
       - name: classify-ci-paths tests
         run: fleet/scripts/test-classify-ci-paths.sh
       - name: selftest
-        if: ${{ steps.paths.outputs.mode != 'docs-only' }}
+        # Nightly and a manual run always execute selftest. The 2-hourly
+        # schedule skips it: that run exists to check bots/ and local/, which
+        # selftest does not read. Push and pull_request follow the classifier.
+        if: ${{ (github.event_name == 'schedule' && github.event.schedule == '0 9 * * *') || github.event_name == 'workflow_dispatch' || (github.event_name != 'schedule' && steps.paths.outputs.mode != 'skip-selftest') }}
         run: fleet/scripts/selftest.sh

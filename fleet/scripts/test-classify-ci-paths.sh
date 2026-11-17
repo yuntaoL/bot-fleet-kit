@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Behavioral tests for classify-ci-paths.sh.
-# Each fixtures/*.name-status file has a "# expect: docs-only|full" header.
-# Also covers CLI failures, live git ranges, and the workflow contract
-# (job name validate, no path filters, only selftest is conditional).
+# Each fixtures/*.name-status file has a "# expect: skip-selftest|full" header.
+# Also covers CLI failures, live git ranges, the selftest input list, and the
+# workflow contract (job name validate, bots-only pushes ignored, pull
+# requests unfiltered, schedules, only selftest is conditional).
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 CLS="$ROOT/classify-ci-paths.sh"
@@ -80,11 +81,72 @@ if [ "$rc" = 0 ] && [ "$out" = "full" ]; then echo "PASS stdin-and-range -> $out
 out="$(printf 'A\tbots/dr-eggbot/journal/2026-11-06.md\n' | "$CLS" --stdin 2>"$reason_file")"
 rc=$?
 reason="$(cat "$reason_file" 2>/dev/null || true)"; rm -f "$reason_file"
-if [ "$rc" = 0 ] && [ "$out" = "docs-only" ]; then echo "PASS stdin-journal -> $out"; pass=$((pass+1)); else echo "FAIL stdin-journal: got '$out' want 'docs-only' ($reason) exit $rc"; fail=$((fail+1)); fi
+if [ "$rc" = 0 ] && [ "$out" = "skip-selftest" ]; then echo "PASS stdin-journal -> $out"; pass=$((pass+1)); else echo "FAIL stdin-journal: got '$out' want 'skip-selftest' ($reason) exit $rc"; fail=$((fail+1)); fi
 out="$(printf '' | "$CLS" --stdin 2>"$reason_file")"
 rc=$?
 reason="$(cat "$reason_file" 2>/dev/null || true)"; rm -f "$reason_file"
 if [ "$rc" = 0 ] && [ "$out" = "full" ]; then echo "PASS stdin-empty -> $out"; pass=$((pass+1)); else echo "FAIL stdin-empty: got '$out' want 'full' ($reason) exit $rc"; fail=$((fail+1)); fi
+
+echo "== selftest input paths =="
+reason_file="$(mktemp)"
+if python3 - "$ROOT" >"$reason_file" << 'PY'
+import pathlib, re, sys
+root = pathlib.Path(sys.argv[1])
+errs = []
+# Scripts selftest executes, plus selftest itself. A new $SRC read outside
+# fleet/, templates/, or examples/ means the safe-prefix list is stale.
+called = [
+    "selftest.sh",
+    "test-staged-config.sh",
+    "test-classify-ci-paths.sh",
+    "test-check-actions.sh",
+    "test-build-prompt.sh",
+    "test-board.sh",
+    "test-journal-gap-midnight.sh",
+    "test-sync-gate.sh",
+]
+src_re = re.compile(r"\$SRC(?P<q>[\"']?)/(?P<path>[^\s\"'`$]+)")
+for name in called:
+    path = root / name
+    if not path.is_file():
+        errs.append("missing %s" % name)
+        continue
+    text = path.read_text(encoding="utf-8")
+    for m in src_re.finditer(text):
+        rel = m.group("path")
+        if rel.startswith("%"):
+            continue
+        if not (rel.startswith("fleet/") or rel.startswith("templates/") or rel.startswith("examples/")):
+            errs.append("%s reads checkout %s" % (name, rel))
+    if name in ("selftest.sh", "test-journal-gap-midnight.sh"):
+        tar = [ln for ln in text.splitlines() if "tar -cf -" in ln]
+        if len(tar) != 1:
+            errs.append("%s tar lines: %d" % (name, len(tar)))
+            continue
+        line = tar[0]
+        for req in ("fleet", "templates", ".github", "README.md", "LICENSE", "examples"):
+            if req not in line:
+                errs.append("%s tar missing %s" % (name, req))
+        for banned in (" local", " local/", " bots", " bots/"):
+            if banned in line:
+                errs.append("%s tar includes %s" % (name, banned.strip()))
+selftest = (root / "selftest.sh").read_text(encoding="utf-8")
+for needle in called[1:]:
+    if needle not in selftest:
+        errs.append("selftest.sh does not run %s" % needle)
+if errs:
+    print("\n".join(errs))
+    sys.exit(1)
+print("ok")
+PY
+then
+  echo "PASS selftest-inputs -> fleet templates .github README.md LICENSE examples"
+  pass=$((pass+1))
+else
+  echo "FAIL selftest-inputs: $(cat "$reason_file")"
+  fail=$((fail+1))
+fi
+rm -f "$reason_file"
 
 echo "== workflow contract =="
 WF="$ROOT/../../.github/workflows/validate.yml"
@@ -95,14 +157,48 @@ path = sys.argv[1]
 lines = open(path, encoding="utf-8").read().splitlines()
 body = "\n".join(lines)
 errs = []
-if "paths-ignore" in body:
-    errs.append("paths-ignore is present")
 if not any(l.strip() == "name: validate" for l in lines):
     errs.append("workflow or job display name is not validate")
 if "  validate:" not in body:
     errs.append("job id validate missing")
-if "on: [push, pull_request]" not in body:
-    errs.append("triggers changed")
+if not any(l.strip() == "pull_request:" for l in lines):
+    errs.append("pull_request trigger missing")
+if not any(l.strip() == "workflow_dispatch:" for l in lines):
+    errs.append("workflow_dispatch missing")
+if "cron: '0 */2 * * *'" not in body:
+    errs.append("2-hourly cron missing")
+if "cron: '0 9 * * *'" not in body:
+    errs.append("nightly cron missing")
+if "timeout-minutes: 10" not in body:
+    errs.append("timeout-minutes: 10 missing")
+if "cancel-in-progress: true" not in body:
+    errs.append("cancel-in-progress missing")
+if "format('validate-{0}'" not in body or "github.ref" not in body:
+    errs.append("concurrency group is not validate-<ref>")
+if "schedule-{1}" not in body or "github.event.schedule" not in body:
+    errs.append("scheduled concurrency group does not include the cron")
+if "github.event_name == 'schedule'" not in body:
+    errs.append("schedule concurrency is not separate from push")
+if "github.ref == 'refs/heads/main'" not in body:
+    errs.append("schedule is not limited to main")
+for l in lines:
+    s = l.strip()
+    if s == "paths:" or s.startswith("paths:"):
+        errs.append("paths filter present: %s" % s)
+idx = [i for i, l in enumerate(lines) if l.strip() == "paths-ignore:"]
+if len(idx) != 1:
+    errs.append("expected exactly one paths-ignore, found %d" % len(idx))
+else:
+    owner = None
+    for j in range(idx[0], -1, -1):
+        if lines[j].startswith("  ") and not lines[j].startswith("   ") and lines[j].strip().endswith(":"):
+            owner = lines[j].strip()
+            break
+    if owner != "push:":
+        errs.append("paths-ignore is under %s, not push" % owner)
+    window = "\n".join(lines[idx[0]:idx[0] + 3])
+    if "bots/**" not in window:
+        errs.append("paths-ignore does not list bots/**")
 steps = []
 cur = None
 for l in lines:
@@ -138,11 +234,12 @@ for script, cond in wanted.items():
     if cond is None and iff is not None:
         errs.append("%s is conditional (%s)" % (script, iff))
     if cond == "conditional":
-        if not iff or "docs-only" not in iff or "!=" not in iff:
-            errs.append("selftest if is not fail-closed: %s" % iff)
+        for needle in ("skip-selftest", "!=", "0 9 * * *", "workflow_dispatch", "github.event_name != 'schedule'"):
+            if not iff or needle not in iff:
+                errs.append("selftest if missing %s: %s" % (needle, iff))
 for st in steps:
-    if st["if"] and "docs-only" in st["if"] and st["run"] != "fleet/scripts/selftest.sh":
-        errs.append("docs-only condition on %s" % st["run"])
+    if st["if"] and "skip-selftest" in (st["if"] or "") and st["run"] != "fleet/scripts/selftest.sh":
+        errs.append("skip-selftest condition on %s" % st["run"])
 if "classify-ci-paths.sh" not in body:
     errs.append("workflow does not name the classifier")
 if "CLASSIFY_BASE_SHA" not in body or "CLASSIFY_HEAD_SHA" not in body:
@@ -155,6 +252,8 @@ if "100644" not in body or "100755" not in body:
     errs.append("base blob mode check missing")
 if "classifier or workflow changed" not in body:
     errs.append("changed classifier or workflow is not fail-closed")
+if "[ \"$MODE\" = \"docs-only\" ]" not in body:
+    errs.append("legacy docs-only token is not accepted")
 for trusted in (
     "fleet/scripts/classify-ci-paths.sh",
     "fleet/scripts/test-classify-ci-paths.sh",
@@ -164,17 +263,15 @@ for trusted in (
         errs.append("trusted path not guarded: %s" % trusted)
 if 'MODE="$(fleet/scripts/classify-ci-paths.sh' in body or "bash fleet/scripts/classify-ci-paths.sh" in body:
     errs.append("workflow executes the worktree classifier")
-if "state.json" not in body:
-    errs.append("workflow no longer says state.json is not inert")
-if any(l.strip().startswith("paths:") for l in lines):
-    errs.append("paths key present")
+if "state.json" not in body or "skip-selftest" not in body:
+    errs.append("workflow does not say state.json skips selftest")
 if errs:
     print("\n".join(errs))
     sys.exit(1)
 print("ok")
 PY
 then
-  echo "PASS workflow-contract -> full-selftest-only-when-not-docs-only"
+  echo "PASS workflow-contract -> selftest-skipped-unless-kit-or-nightly"
   pass=$((pass+1))
 else
   echo "FAIL workflow-contract: $(cat "$reason_file")"
@@ -224,21 +321,28 @@ commit_range() {
 }
 
 printf 'day two\n' > "$LIVE/bots/dr-eggbot/journal/2026-11-06.md"
-commit_range live-journal-modify docs-only
+commit_range live-journal-modify skip-selftest
 printf -- '---\ntype: index\n---\nmore\n' > "$LIVE/bots/dr-eggbot/kb/INDEX.md"
-commit_range live-kb-modify docs-only
+commit_range live-kb-modify skip-selftest
 printf -- '---\ntype: note\n---\n' > "$LIVE/bots/dr-eggbot/kb/audits/note.md"
-commit_range live-kb-add docs-only
+commit_range live-kb-add skip-selftest
 printf 'new day\n' > "$LIVE/bots/dr-eggbot/journal/2026-11-07.md"
-commit_range live-journal-add docs-only
+commit_range live-journal-add skip-selftest
 g mv bots/dr-eggbot/journal/2026-11-07.md bots/dr-eggbot/journal/2026-11-08.md
-commit_range live-rename-journal docs-only
+commit_range live-rename-journal skip-selftest
 g rm -q bots/dr-eggbot/journal/2026-11-08.md
 commit_range live-delete-journal full
 printf 'secret changed\n' > "$LIVE/bots/dr-eggbot/secrets.md"
-commit_range live-secrets full
+commit_range live-secrets skip-selftest
+mkdir -p "$LIVE/bots/ada" "$LIVE/local"
+printf '{}\n' > "$LIVE/bots/ada/state.json"
+commit_range live-bots-state skip-selftest
+printf '{}\n' > "$LIVE/local/fleet.json"
+commit_range live-local-only skip-selftest
 printf '#!/bin/sh\nfalse\n' > "$LIVE/fleet/scripts/validate.sh"
 commit_range live-script full
+printf 'readme\n' > "$LIVE/README.md"
+commit_range live-readme full
 
 reason_file="$(mktemp)"
 out="$(cd "$LIVE" && ./classify.sh --base "$prev" --head "$prev" 2>"$reason_file")"
@@ -255,7 +359,7 @@ if [ "$rc" = 0 ] && [ "$out" = "full" ]; then echo "PASS live-bad-sha -> $out"; 
 # new day while rewriting the source. --find-copies records status C, which must
 # not be treated as an add of an allowlisted path.
 python3 -c 'print("journal line\n"*20, end="")' > "$LIVE/bots/dr-eggbot/journal/2026-11-06.md"
-commit_range live-journal-long docs-only
+commit_range live-journal-long skip-selftest
 cp "$LIVE/bots/dr-eggbot/journal/2026-11-06.md" "$LIVE/bots/dr-eggbot/journal/2026-11-09.md"
 printf 'rewritten journal that does not resemble the old one at all, extra words here\n' > "$LIVE/bots/dr-eggbot/journal/2026-11-06.md"
 commit_range live-copy-journal full
@@ -387,10 +491,10 @@ if [ -s "$CI_SCRIPT" ]; then
   printf 'day two\n' > "$REPO/bots/dr-eggbot/journal/2026-11-06.md"
   gg add -A && gg commit -qm journal
   HEAD_JOURNAL="$(gg rev-parse HEAD)"
-  decide ci-journal-only docs-only "$BASE0" "$HEAD_JOURNAL" "$REPO" "base classifier reported docs-only"
+  decide ci-journal-only skip-selftest "$BASE0" "$HEAD_JOURNAL" "$REPO" "base classifier reported skip-selftest"
 
   # A dirty worktree classifier must not be the skip decision. This copy
-  # prints full for every diff; the committed blob still says docs-only.
+  # prints full for every diff; the committed blob still says skip-selftest.
   cat > "$REPO/fleet/scripts/classify-ci-paths.sh" << 'EOF'
 #!/bin/sh
 printf '%s\n' full
@@ -403,13 +507,13 @@ EOF
     echo "FAIL dirty-worktree-would-say-full: got '$dirty'"
     fail=$((fail+1))
   fi
-  decide ci-dirty-worktree-ignored docs-only "$BASE0" "$HEAD_JOURNAL" "$REPO" "base classifier reported docs-only"
+  decide ci-dirty-worktree-ignored skip-selftest "$BASE0" "$HEAD_JOURNAL" "$REPO" "base classifier reported skip-selftest"
   gg checkout -q -- fleet/scripts/classify-ci-paths.sh
 
   printf '{ "changed": true }\n' > "$REPO/bots/dr-eggbot/state.json"
   gg add -A && gg commit -qm state
   HEAD_STATE="$(gg rev-parse HEAD)"
-  decide ci-state-json-not-skippable full "$HEAD_JOURNAL" "$HEAD_STATE" "$REPO" "base classifier did not report docs-only"
+  decide ci-state-json-skips-selftest skip-selftest "$HEAD_JOURNAL" "$HEAD_STATE" "$REPO" "base classifier reported skip-selftest"
 
   printf '\n# not a behavior change\n' >> "$REPO/fleet/scripts/test-classify-ci-paths.sh"
   gg add -A && gg commit -qm tests
@@ -424,7 +528,7 @@ EOF
   printf 'hacked\n' >> "$REPO/README.md"
   cat > "$REPO/fleet/scripts/classify-ci-paths.sh" << 'EOF'
 #!/bin/sh
-printf '%s\n' docs-only
+printf '%s\n' skip-selftest
 EOF
   gg add -A && gg commit -qm weaken
   HEAD_WEAK="$(gg rev-parse HEAD)"
@@ -434,11 +538,11 @@ EOF
   gg cat-file blob "$BASE0:fleet/scripts/classify-ci-paths.sh" > "$base_blob"
   base_out="$(cd "$REPO" && bash "$base_blob" --base "$BASE0" --head "$HEAD_WEAK" 2>"$base_err")"
   rm -f "$base_blob" "$base_err"
-  if [ "$head_out" = "docs-only" ]; then
-    echo "PASS weakened-head-says-docs-only -> $head_out"
+  if [ "$head_out" = "skip-selftest" ]; then
+    echo "PASS weakened-head-says-skip-selftest -> $head_out"
     pass=$((pass+1))
   else
-    echo "FAIL weakened-head-says-docs-only: got '$head_out'"
+    echo "FAIL weakened-head-says-skip-selftest: got '$head_out'"
     fail=$((fail+1))
   fi
   if [ "$base_out" = "full" ]; then
@@ -493,6 +597,26 @@ EOF
     fail=$((fail+1))
   fi
   decide ci-symlink-classifier-full full "$link_base" "$link_head" "$LINK" "not a regular file"
+
+  # An unchanged base blob that still prints the old token skips selftest.
+  LEG="$R1/legacy"
+  mkdir -p "$LEG/fleet/scripts" "$LEG/.github/workflows" "$LEG/bots/ada/journal"
+  cat > "$LEG/fleet/scripts/classify-ci-paths.sh" << 'EOF'
+#!/bin/sh
+printf '%s\n' docs-only
+EOF
+  cp "$ROOT/test-classify-ci-paths.sh" "$LEG/fleet/scripts/test-classify-ci-paths.sh"
+  cp "$WF" "$LEG/.github/workflows/validate.yml"
+  printf 'day one\n' > "$LEG/bots/ada/journal/2026-11-06.md"
+  git -C "$LEG" init -q -b main
+  git -C "$LEG" -c user.email=test@example.invalid -c user.name=test -c commit.gpgsign=false add -A
+  git -C "$LEG" -c user.email=test@example.invalid -c user.name=test -c commit.gpgsign=false commit -qm base
+  leg_base="$(git -C "$LEG" rev-parse HEAD)"
+  printf 'day two\n' > "$LEG/bots/ada/journal/2026-11-06.md"
+  git -C "$LEG" -c user.email=test@example.invalid -c user.name=test -c commit.gpgsign=false add -A
+  git -C "$LEG" -c user.email=test@example.invalid -c user.name=test -c commit.gpgsign=false commit -qm journal
+  leg_head="$(git -C "$LEG" rev-parse HEAD)"
+  decide ci-legacy-docs-only-token skip-selftest "$leg_base" "$leg_head" "$LEG" "legacy skip token"
 fi
 
 echo

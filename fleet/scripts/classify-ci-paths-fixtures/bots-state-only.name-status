@@ -1,0 +1,3 @@
+# expect: skip-selftest
+# case: bots-state-only
+M	bots/ada/state.json

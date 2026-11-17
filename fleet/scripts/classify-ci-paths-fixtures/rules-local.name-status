@@ -1,3 +1,3 @@
-# expect: full
+# expect: skip-selftest
 # case: rules-local
 M	local/rules/yuntao.md
